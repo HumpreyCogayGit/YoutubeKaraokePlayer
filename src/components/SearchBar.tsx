@@ -31,7 +31,8 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
   const BLOCKED_CHANNELS = [
     'Sing King',
     'KaraFun',
-    'KantaOke'
+    'KantaOke',
+    'Vevo'
     ]
 
   // Preferred channels to prioritize in search results

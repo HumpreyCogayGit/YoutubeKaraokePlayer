@@ -17,3 +17,22 @@ body {
   min-height: 100vh;
   background-color: #E8E3D5;
 }
+
+@keyframes scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-scroll {
+  display: inline-block;
+  animation: scroll 15s linear infinite;
+  padding-right: 100%;
+}
+
+.animate-scroll:hover {
+  animation-play-state: paused;
+}

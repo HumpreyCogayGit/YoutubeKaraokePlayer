@@ -7,6 +7,7 @@ import passport from './auth.js';
 import authRoutes from './routes/auth.js';
 import playlistRoutes from './routes/playlists.js';
 import userRoutes from './routes/user.js';
+import partyRoutes from './routes/party.js';
 import pool from './db.js';
 
 dotenv.config();
@@ -52,6 +53,7 @@ app.use(passport.session());
 app.use('/auth', authRoutes);
 app.use('/api/playlists', playlistRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/party', partyRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

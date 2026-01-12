@@ -9,9 +9,11 @@ interface PlaylistProps {
   onPlay: (index: number) => void
   onRemove: (index: number) => void
   onClear: () => void
+  isPartyPlaylist?: boolean
+  partyName?: string
 }
 
-const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear }: PlaylistProps) => {
+const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear, isPartyPlaylist = false, partyName }: PlaylistProps) => {
   const { isAuthenticated } = useAuth()
   const [saving, setSaving] = useState(false)
   const [playlistName, setPlaylistName] = useState('')
@@ -40,9 +42,18 @@ const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear }: PlaylistPr
   return (
     <div className="bg-gray-800 border border-gray-700 rounded-lg shadow-lg p-4 h-full flex flex-col">
       <div className="flex justify-between items-center mb-3">
-        <h2 className="text-xl font-bold text-white tracking-tight">Playlist ({items.length})</h2>
+        <div>
+          <h2 className="text-xl font-bold text-white tracking-tight">
+            {isPartyPlaylist ? 'Party Queue' : 'Playlist'} ({items.length})
+          </h2>
+          {isPartyPlaylist && partyName && (
+            <p className="text-xs text-purple-400 mt-1">
+              <span className="bg-purple-600 px-2 py-0.5 rounded">PARTY</span> {partyName}
+            </p>
+          )}
+        </div>
         <div className="flex gap-2">
-          {isAuthenticated && items.length > 0 && (
+          {!isPartyPlaylist && isAuthenticated && items.length > 0 && (
             <button
               onClick={() => setShowSaveDialog(true)}
               className="px-3 py-1 text-xs bg-orange-500 text-white rounded hover:bg-orange-600 transition-all"
@@ -50,7 +61,7 @@ const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear }: PlaylistPr
               Save
             </button>
           )}
-          {items.length > 0 && (
+          {!isPartyPlaylist && items.length > 0 && (
             <button
               onClick={onClear}
               className="px-3 py-1 text-xs bg-gray-700 text-white rounded hover:bg-gray-600 transition-all"
@@ -114,6 +125,11 @@ const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear }: PlaylistPr
                   {item.title}
                 </h3>
                 <p className="text-gray-400 text-xs line-clamp-1">{item.channelTitle}</p>
+                {isPartyPlaylist && item.addedBy && (
+                  <p className="text-purple-400 text-xs mt-0.5">
+                    Added by: {item.addedBy}
+                  </p>
+                )}
               </div>
               <div className="flex gap-1 flex-shrink-0">
                 <button
@@ -128,11 +144,15 @@ const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear }: PlaylistPr
                 <button
                   onClick={() => onRemove(index)}
                   className="p-1 bg-gray-600 text-white rounded hover:bg-gray-500 transition-all"
-                  title="Remove"
+                  title={isPartyPlaylist ? "Mark as played" : "Remove"}
                 >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
+                  {isPartyPlaylist ? (
+                    <span className="text-xs px-1">Done</span>
+                  ) : (
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  )}
                 </button>
               </div>
             </div>
