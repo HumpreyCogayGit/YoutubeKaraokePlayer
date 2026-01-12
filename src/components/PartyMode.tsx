@@ -119,7 +119,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
         partyAPI.getPartyMembers(currentParty.id)
       ]);
       console.log('[PartyMode] Loaded', songs.length, 'songs');
-      setPartySongs(songs);
+      // Force a new array reference to trigger React re-render
+      setPartySongs([...songs]);
       setPartyMembers(members);
       // Notify parent component of song updates (for guests viewing on main screen)
       if (onPartySongsUpdate) {
@@ -190,7 +191,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
         partyAPI.getPartySongs(party.id),
         partyAPI.getPartyMembers(party.id)
       ]);
-      setPartySongs(songs);
+      // Force a new array reference to trigger React re-render
+      setPartySongs([...songs]);
       setPartyMembers(members);
       // Notify parent component of initial song load
       if (onPartySongsUpdate) {
