@@ -100,18 +100,21 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
     console.log('[PartyMode] Loading party details for party:', currentParty.id);
     
     try {
-      // Check if party is still active
-      const partyDetails = await partyAPI.getParty(currentParty.id);
-      
-      if (!partyDetails.is_active) {
-        // Party has ended - show message and close after 3 seconds
-        setPartyEnded(true);
-        setTimeout(() => {
-          setCurrentParty(null);
-          setView('list');
-          onClose();
-        }, 3000);
-        return;
+      // Only check party status if user is authenticated (host or member)
+      // Guests don't have access to getParty endpoint
+      if (isAuthenticated) {
+        const partyDetails = await partyAPI.getParty(currentParty.id);
+        
+        if (!partyDetails.is_active) {
+          // Party has ended - show message and close after 3 seconds
+          setPartyEnded(true);
+          setTimeout(() => {
+            setCurrentParty(null);
+            setView('list');
+            onClose();
+          }, 3000);
+          return;
+        }
       }
       
       const [songs, members] = await Promise.all([
