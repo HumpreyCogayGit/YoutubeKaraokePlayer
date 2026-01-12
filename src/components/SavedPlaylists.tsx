@@ -10,7 +10,6 @@ interface SavedPlaylistsProps {
 const SavedPlaylists = ({ onClose, onLoadPlaylist }: SavedPlaylistsProps) => {
   const [playlists, setPlaylists] = useState<SavedPlaylist[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedPlaylist, setSelectedPlaylist] = useState<SavedPlaylist | null>(null)
 
   useEffect(() => {
     fetchPlaylists()

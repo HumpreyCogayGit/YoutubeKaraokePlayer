@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface User {
   id: number;
@@ -6,6 +6,7 @@ interface User {
   email: string;
   name: string;
   profile_picture: string;
+  created_at?: string;
 }
 
 interface AuthContextType {

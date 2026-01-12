@@ -1,4 +1,4 @@
-import { useState, FormEvent, useCallback, useRef } from 'react'
+import { useState, FormEvent, useRef } from 'react'
 import { PlaylistItem } from '../App'
 
 interface SearchResult {
@@ -25,7 +25,6 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
   const [enableBlockedFilter, setEnableBlockedFilter] = useState(true)
   const [enablePreferredFilter, setEnablePreferredFilter] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const lastSearchTimeRef = useRef<number>(0)
 
   // Channels that commonly disable embedding
@@ -93,7 +92,7 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
     
     if (!API_KEY) {
       setError('YouTube API key not configured. Please add VITE_YOUTUBE_API_KEY to your .env file.')
-      setIsSearching(false)
+      setIsLoading(false)
       return
     }
     
