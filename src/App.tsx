@@ -103,13 +103,26 @@ function App() {
           const songs = await partyAPI.getPartySongs(hostParty.id)
           console.log('[App] Reloaded party songs, total:', songs.length, 'unplayed:', songs.filter(s => !s.played).length)
           setPartySongs([...songs]) // Force new array reference
+          
+          // After marking as played, the filtered array shifts
+          // The next song is now at index 0
+          const unplayedSongs = songs.filter(s => !s.played)
+          if (unplayedSongs.length > 0) {
+            setCurrentIndex(0)
+            setSelectedVideoId(unplayedSongs[0].video_id)
+          } else {
+            // No more songs, reset
+            setCurrentIndex(-1)
+            setSelectedVideoId('')
+          }
+          return // Exit early since we already set the next song
         } catch (err) {
           console.error('Failed to mark song as played:', err)
         }
       }
     }
 
-    // Move to next song
+    // For non-party playlists, just move to next index
     if (currentIndex < displayPlaylist.length - 1) {
       const nextIndex = currentIndex + 1
       setCurrentIndex(nextIndex)
