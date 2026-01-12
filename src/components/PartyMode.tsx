@@ -160,6 +160,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       }
       setView('party');
       loadParties();
+      // Load party details immediately for guests
+      await loadPartyDetails();
     } catch (err: any) {
       setError(err.message || 'Failed to join party');
     } finally {
@@ -413,18 +415,25 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
                     <h3 className="text-2xl font-bold text-white">{currentParty.name}</h3>
-                    <span className="bg-yellow-600 text-yellow-100 text-xs font-bold px-2 py-1 rounded-full">
-                      HOST WINDOW
-                    </span>
+                    {currentParty.host_user_id === user?.id ? (
+                      <span className="bg-yellow-600 text-yellow-100 text-xs font-bold px-2 py-1 rounded-full">
+                        HOST WINDOW
+                      </span>
+                    ) : (
+                      <span className="bg-blue-600 text-blue-100 text-xs font-bold px-2 py-1 rounded-full">
+                        GUEST
+                      </span>
+                    )}
                   </div>
                   <div className="text-gray-300 mb-2">
                     Party Code: <span className="font-mono bg-gray-900 px-3 py-1 rounded text-lg">{currentParty.code}</span>
                   </div>
                   <div className="text-gray-400 text-sm">
-                    {partyMembers.length} member{partyMembers.length !== 1 ? 's' : ''} • {partySongs.filter(s => !s.played).length} pending songs
+                    {partySongs.filter(s => !s.played).length} song{partySongs.filter(s => !s.played).length !== 1 ? 's' : ''} in queue
                   </div>
                 </div>
-                {qrCodeUrl && (
+                {/* Only show QR code and members to host */}
+                {currentParty.host_user_id === user?.id && qrCodeUrl && (
                   <div className="ml-4">
                     <img src={qrCodeUrl} alt="Party QR Code" className="w-32 h-32 bg-white p-2 rounded" />
                     <div className="text-xs text-gray-400 text-center mt-1">Scan to join</div>
@@ -433,18 +442,20 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
               </div>
             </div>
 
-            {/* Members */}
-            <div className="mb-6">
-              <h4 className="text-lg font-bold text-white mb-3">Members ({partyMembers.length})</h4>
-              <div className="flex flex-wrap gap-2">
-                {partyMembers.map((member) => (
-                  <div key={member.id} className="flex items-center gap-2 bg-gray-700 rounded-full px-3 py-1">
-                    <img src={member.profile_picture} alt={member.name} className="w-6 h-6 rounded-full" />
-                    <span className="text-white text-sm">{member.name}</span>
-                  </div>
-                ))}
+            {/* Members - Host only */}
+            {currentParty.host_user_id === user?.id && (
+              <div className="mb-6">
+                <h4 className="text-lg font-bold text-white mb-3">Members ({partyMembers.length})</h4>
+                <div className="flex flex-wrap gap-2">
+                  {partyMembers.map((member) => (
+                    <div key={member.id} className="flex items-center gap-2 bg-gray-700 rounded-full px-3 py-1">
+                      <img src={member.profile_picture} alt={member.name} className="w-6 h-6 rounded-full" />
+                      <span className="text-white text-sm">{member.name}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Add Song Button */}
             <div className="mb-6">
@@ -488,20 +499,23 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
                         <div className="text-gray-400 text-sm truncate">{song.channel_title}</div>
                         <div className="text-gray-500 text-xs">Added by {song.added_by_name}</div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handlePlaySong(song.video_id)}
-                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
-                        >
-                          Play
-                        </button>
-                        <button
-                          onClick={() => handleMarkPlayed(song.id)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
-                        >
-                          Done
-                        </button>
-                      </div>
+                      {/* Only show Play/Done buttons to host */}
+                      {currentParty.host_user_id === user?.id && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handlePlaySong(song.video_id)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Play
+                          </button>
+                          <button
+                            onClick={() => handleMarkPlayed(song.id)}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm"
+                          >
+                            Done
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
