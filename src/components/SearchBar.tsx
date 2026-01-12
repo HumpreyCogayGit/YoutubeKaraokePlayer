@@ -32,7 +32,8 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
     'Sing King',
     'KaraFun',
     'KantaOke',
-    'Vevo'
+    'Vevo',
+    'karaoke SESH'
     ]
 
   // Preferred channels to prioritize in search results

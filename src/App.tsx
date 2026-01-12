@@ -95,6 +95,15 @@ function App() {
       const parties = await partyAPI.getMyParties()
       // Find the party where current user is the host
       const myHostParty = parties.find(p => p.host_user_id === user?.id)
+      
+      // Check if party is still active
+      if (myHostParty && !myHostParty.is_active) {
+        // Party has ended - clear it
+        setHostParty(null)
+        setPartySongs([])
+        return
+      }
+      
       setHostParty(myHostParty || null)
       
       if (myHostParty) {
@@ -210,7 +219,7 @@ function App() {
               Youtube Karaoke Player by MangHumps
               <span className="ml-2 text-xs font-normal bg-yellow-600 text-yellow-100 px-2 py-1 rounded">BETA</span>
             </h1>
-            <p className="text-xs text-gray-400 mt-1">Build #{Date.now().toString().slice(-8)}</p>
+            <p className="text-xs text-gray-400 mt-1">Build #{import.meta.env.VITE_BUILD_ID || 'dev'}</p>
           </div>
           
           <div className="flex items-center gap-4">

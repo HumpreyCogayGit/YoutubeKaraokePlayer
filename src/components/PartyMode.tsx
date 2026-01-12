@@ -82,6 +82,18 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
     if (!currentParty) return;
     
     try {
+      // Check if party is still active
+      const partyDetails = await partyAPI.getParty(currentParty.id);
+      
+      if (!partyDetails.is_active) {
+        // Party has ended - close modal and show message
+        alert('This party has ended.');
+        setCurrentParty(null);
+        setView('list');
+        onClose();
+        return;
+      }
+      
       const [songs, members] = await Promise.all([
         partyAPI.getPartySongs(currentParty.id),
         partyAPI.getPartyMembers(currentParty.id)
@@ -90,6 +102,13 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       setPartyMembers(members);
     } catch (err) {
       console.error('Failed to load party details:', err);
+      // If party not found (404), it might have been ended
+      if ((err as any).message?.includes('404') || (err as any).message?.includes('not found')) {
+        alert('This party has ended.');
+        setCurrentParty(null);
+        setView('list');
+        onClose();
+      }
     }
   };
 
