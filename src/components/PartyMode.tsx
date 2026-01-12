@@ -5,7 +5,7 @@ import SearchBar from './SearchBar';
 import { useAuth } from '../contexts/AuthContext';
 
 interface PartyModeProps {
-  onClose: () => void;
+  onClose: (party?: Party | null, songs?: PartySong[], guestName?: string | null) => void;
   onVideoSelect: (videoId: string) => void;
   initialParty?: Party | null;
 }
@@ -182,12 +182,21 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
     }
   };
 
+  const handleClose = () => {
+    // If user is a guest in a party, pass the party data back to App
+    if (currentParty && currentGuestName) {
+      onClose(currentParty, partySongs, currentGuestName);
+    } else {
+      onClose();
+    }
+  };
+
   const handleLeaveParty = () => {
     if (!confirm('Are you sure you want to leave this party?')) return;
     setCurrentParty(null);
     setCurrentGuestName(null);
     setView('list');
-    onClose();
+    onClose(); // Call onClose without party data to clear guest state
   };
 
   const handleMarkPlayed = async (songId: number) => {
@@ -231,14 +240,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
         <div className="p-4 border-b border-gray-700 flex justify-between items-center sticky top-0 bg-gray-800 z-10">
           <h2 className="text-2xl font-bold text-white">Party Mode</h2>
           <button
-            onClick={() => {
-              // If guest is in a party, minimize instead of fully closing
-              if (view === 'party' && currentParty && currentParty.host_user_id !== user?.id && currentGuestName) {
-                onClose(); // Just minimize, keep party connection
-              } else {
-                onClose();
-              }
-            }}
+            onClick={handleClose}
             className="text-gray-400 hover:text-white text-2xl"
           >
             ×

@@ -30,6 +30,9 @@ function App() {
   const [hostParty, setHostParty] = useState<Party | null>(null)
   const [partySongs, setPartySongs] = useState<PartySong[]>([])
   const [showSidebar, setShowSidebar] = useState(true)
+  const [guestParty, setGuestParty] = useState<Party | null>(null)
+  const [guestPartySongs, setGuestPartySongs] = useState<PartySong[]>([])
+  const [guestName, setGuestName] = useState<string | null>(null)
 
   // Check for QR code scan on mount
   useEffect(() => {
@@ -136,8 +139,47 @@ function App() {
     return () => clearInterval(interval)
   }, [isAuthenticated, user])
 
+  // Load guest party details periodically
+  const loadGuestParty = async () => {
+    if (!guestParty) return
+
+    try {
+      // Check if party is still active
+      const partyDetails = await partyAPI.getParty(guestParty.id)
+      
+      if (!partyDetails.is_active) {
+        // Party has ended - clear guest state
+        setGuestParty(null)
+        setGuestPartySongs([])
+        setGuestName(null)
+        return
+      }
+      
+      const songs = await partyAPI.getPartySongs(guestParty.id)
+      setGuestPartySongs(songs)
+    } catch (err) {
+      console.error('Failed to load guest party:', err)
+      // If party not found, clear state
+      if ((err as any).message?.includes('404') || (err as any).message?.includes('not found')) {
+        setGuestParty(null)
+        setGuestPartySongs([])
+        setGuestName(null)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!guestParty) return
+
+    loadGuestParty()
+    // Refresh every 5 seconds
+    const interval = setInterval(loadGuestParty, 5000)
+    return () => clearInterval(interval)
+  }, [guestParty])
+
   // Convert party songs to playlist items (exclude played songs)
-  const partyPlaylist: PlaylistItem[] = partySongs
+  const allPartySongs = hostParty ? partySongs : (guestParty ? guestPartySongs : [])
+  const partyPlaylist: PlaylistItem[] = allPartySongs
     .filter(song => !song.played)
     .map(song => ({
       id: song.video_id,
@@ -148,8 +190,9 @@ function App() {
     }))
 
   // Determine which playlist to show
-  const displayPlaylist = hostParty ? partyPlaylist : playlist
-  const isPartyPlaylist = !!hostParty
+  const displayPlaylist = hostParty ? partyPlaylist : (guestParty ? partyPlaylist : playlist)
+  const isPartyPlaylist = !!hostParty || !!guestParty
+  const isGuest = !!guestParty && !!guestName
 
   const handlePlayFromPlaylist = (index: number) => {
     if (isPartyPlaylist) {
@@ -347,7 +390,7 @@ function App() {
                   onRemove={handleRemoveFromPlaylist}
                   onClear={handleClearPlaylist}
                   isPartyPlaylist={isPartyPlaylist}
-                  partyName={hostParty?.name}
+                  partyName={hostParty?.name || guestParty?.name}
                 />
               </div>
             </div>
@@ -401,10 +444,30 @@ function App() {
                 )}
               </div>
             )}
-            <VideoPlayer 
-              videoId={selectedVideoId}
-              onVideoEnd={playNext}
-            />
+            {/* Video Player - Hidden for guests */}
+            {!isGuest && (
+              <VideoPlayer 
+                videoId={selectedVideoId}
+                onVideoEnd={playNext}
+              />
+            )}
+            
+            {/* Guest Message - Show when user is a guest */}
+            {isGuest && (
+              <div className="flex-1 bg-gray-800 rounded-lg flex items-center justify-center">
+                <div className="text-center">
+                  <h2 className="text-2xl font-bold text-emerald-500 mb-2">Guest Mode</h2>
+                  <p className="text-gray-400">You're viewing the party as: <span className="text-white">{guestName}</span></p>
+                  <p className="text-gray-500 text-sm mt-4">Only the host can play videos</p>
+                  <button
+                    onClick={() => setShowPartyMode(true)}
+                    className="mt-6 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
+                  >
+                    Open Party Details
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -427,9 +490,17 @@ function App() {
       
       {showPartyMode && (
         <PartyMode 
-          onClose={() => {
+          onClose={(party, songs, guestNameFromParty) => {
             setShowPartyMode(false);
             setSelectedParty(null);
+            
+            // If guest party data is passed, store it
+            if (party && guestNameFromParty) {
+              setGuestParty(party);
+              setGuestPartySongs(songs || []);
+              setGuestName(guestNameFromParty);
+            }
+            
             loadHostParty(); // Refresh host party data after closing
           }}
           onVideoSelect={setSelectedVideoId}
