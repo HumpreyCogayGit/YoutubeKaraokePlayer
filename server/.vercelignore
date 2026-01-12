@@ -1,0 +1,28 @@
+# Development files
+.env
+.env.local
+.env.development
+*.log
+
+# Editor
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend files (deployed separately)
+../src/
+../public/
+../index.html
+../package.json
+../vite.config.ts
+../tailwind.config.js
+../postcss.config.js
+
+# Documentation
+../SECURITY.md
+../SETUP.md
+../VERCEL_DEPLOYMENT.md
+README.md
