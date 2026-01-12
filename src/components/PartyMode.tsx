@@ -55,12 +55,12 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
   }, []);
 
   useEffect(() => {
-    if (currentParty) {
+    if (currentParty && view === 'party') {
       loadPartyDetails();
       const interval = setInterval(loadPartyDetails, 5000); // Refresh every 5 seconds
       return () => clearInterval(interval);
     }
-  }, [currentParty]);
+  }, [currentParty, currentGuestName, view]); // Include currentGuestName to avoid stale closures
 
   useEffect(() => {
     if (currentParty && view === 'party') {

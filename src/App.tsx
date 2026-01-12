@@ -34,6 +34,34 @@ function App() {
   const [guestPartySongs, setGuestPartySongs] = useState<PartySong[]>([])
   const [guestName, setGuestName] = useState<string | null>(null)
 
+  // Load persisted guest party state on mount
+  useEffect(() => {
+    const savedGuestParty = localStorage.getItem('guestParty')
+    const savedGuestName = localStorage.getItem('guestName')
+    if (savedGuestParty && savedGuestName) {
+      try {
+        const party = JSON.parse(savedGuestParty)
+        setGuestParty(party)
+        setGuestName(savedGuestName)
+      } catch (err) {
+        console.error('Failed to restore guest party:', err)
+        localStorage.removeItem('guestParty')
+        localStorage.removeItem('guestName')
+      }
+    }
+  }, [])
+
+  // Persist guest party state to localStorage
+  useEffect(() => {
+    if (guestParty && guestName) {
+      localStorage.setItem('guestParty', JSON.stringify(guestParty))
+      localStorage.setItem('guestName', guestName)
+    } else {
+      localStorage.removeItem('guestParty')
+      localStorage.removeItem('guestName')
+    }
+  }, [guestParty, guestName])
+
   // Check for QR code scan on mount
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search)
@@ -148,10 +176,12 @@ function App() {
       const partyDetails = await partyAPI.getParty(guestParty.id)
       
       if (!partyDetails.is_active) {
-        // Party has ended - clear guest state
+        // Party has ended - clear guest state and localStorage
         setGuestParty(null)
         setGuestPartySongs([])
         setGuestName(null)
+        localStorage.removeItem('guestParty')
+        localStorage.removeItem('guestName')
         return
       }
       
@@ -159,11 +189,13 @@ function App() {
       setGuestPartySongs(songs)
     } catch (err) {
       console.error('Failed to load guest party:', err)
-      // If party not found, clear state
+      // If party not found, clear state and localStorage
       if ((err as any).message?.includes('404') || (err as any).message?.includes('not found')) {
         setGuestParty(null)
         setGuestPartySongs([])
         setGuestName(null)
+        localStorage.removeItem('guestParty')
+        localStorage.removeItem('guestName')
       }
     }
   }
@@ -499,6 +531,11 @@ function App() {
               setGuestParty(party);
               setGuestPartySongs(songs || []);
               setGuestName(guestNameFromParty);
+            } else if (guestParty && !party) {
+              // If called without data and user was a guest, they're leaving
+              setGuestParty(null);
+              setGuestPartySongs([]);
+              setGuestName(null);
             }
             
             loadHostParty(); // Refresh host party data after closing
