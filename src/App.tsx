@@ -206,7 +206,21 @@ function App() {
     loadGuestParty()
     // Refresh every 5 seconds
     const interval = setInterval(loadGuestParty, 5000)
-    return () => clearInterval(interval)
+    
+    // Handle page visibility changes (important for mobile Safari)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('[App] Page became visible, refreshing guest party')
+        loadGuestParty()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      clearInterval(interval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [guestParty])
 
   // Convert party songs to playlist items (exclude played songs)
@@ -415,6 +429,21 @@ function App() {
                 </div>
               )}
               <div className="flex-shrink-0">
+                {/* Manual refresh button for guests on mobile */}
+                {isGuest && (
+                  <button
+                    onClick={() => {
+                      console.log('[App] Manual refresh triggered')
+                      loadGuestParty()
+                    }}
+                    className="w-full mb-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh Queue
+                  </button>
+                )}
                 <Playlist 
                   items={displayPlaylist}
                   currentIndex={currentIndex}
@@ -544,6 +573,7 @@ function App() {
           initialParty={selectedParty}
           onPartySongsUpdate={(songs) => {
             // Update guest party songs in real-time when modal is open
+            console.log('[App] onPartySongsUpdate called with', songs.length, 'songs');
             setGuestPartySongs(songs);
           }}
         />

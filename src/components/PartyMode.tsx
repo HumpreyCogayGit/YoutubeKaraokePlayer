@@ -58,7 +58,21 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
     if (currentParty && view === 'party') {
       loadPartyDetails();
       const interval = setInterval(loadPartyDetails, 5000); // Refresh every 5 seconds
-      return () => clearInterval(interval);
+      
+      // Handle page visibility changes (important for mobile Safari)
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          console.log('[PartyMode] Page became visible, refreshing party details')
+          loadPartyDetails()
+        }
+      }
+      
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+      
+      return () => {
+        clearInterval(interval)
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
     }
   }, [currentParty, currentGuestName, view]); // Include currentGuestName to avoid stale closures
 
@@ -83,6 +97,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
   const loadPartyDetails = async () => {
     if (!currentParty) return;
     
+    console.log('[PartyMode] Loading party details for party:', currentParty.id);
+    
     try {
       // Check if party is still active
       const partyDetails = await partyAPI.getParty(currentParty.id);
@@ -102,11 +118,15 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
         partyAPI.getPartySongs(currentParty.id),
         partyAPI.getPartyMembers(currentParty.id)
       ]);
+      console.log('[PartyMode] Loaded', songs.length, 'songs');
       setPartySongs(songs);
       setPartyMembers(members);
       // Notify parent component of song updates (for guests viewing on main screen)
       if (onPartySongsUpdate) {
+        console.log('[PartyMode] Calling onPartySongsUpdate with', songs.length, 'songs');
         onPartySongsUpdate(songs);
+      } else {
+        console.log('[PartyMode] onPartySongsUpdate callback not provided');
       }
     } catch (err) {
       console.error('Failed to load party details:', err);
@@ -232,6 +252,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
     if (!currentParty) return;
 
     try {
+      console.log('[PartyMode] Adding song to party:', item.title);
       await partyAPI.addSongToParty(currentParty.id, {
         video_id: item.id,
         title: item.title,
@@ -239,10 +260,13 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
         channel_title: item.channelTitle,
         guest_name: currentGuestName || undefined,
       });
+      console.log('[PartyMode] Song added successfully, reloading party details');
       // Reload party details to update the queue
       await loadPartyDetails();
+      console.log('[PartyMode] Party details reloaded');
       setShowSearch(false);
     } catch (err: any) {
+      console.error('[PartyMode] Failed to add song:', err);
       setError(err.message || 'Failed to add song');
     }
   };
@@ -515,7 +539,21 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
 
             {/* Songs Queue */}
             <div>
-              <h4 className="text-lg font-bold text-white mb-3">Song Queue</h4>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-lg font-bold text-white">Song Queue</h4>
+                <button
+                  onClick={() => {
+                    console.log('[PartyMode] Manual refresh triggered')
+                    loadPartyDetails()
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  Refresh
+                </button>
+              </div>
               {partySongs.filter(song => !song.played).length === 0 ? (
                 <p className="text-gray-400 text-center py-8">No songs added yet. Click "Add Song to Queue" to search!</p>
               ) : (
