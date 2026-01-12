@@ -8,9 +8,10 @@ interface PartyModeProps {
   onClose: (party?: Party | null, songs?: PartySong[], guestName?: string | null) => void;
   onVideoSelect: (videoId: string) => void;
   initialParty?: Party | null;
+  onPartySongsUpdate?: (songs: PartySong[]) => void;
 }
 
-const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => {
+const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }: PartyModeProps) => {
   const { user, isAuthenticated } = useAuth();
   const [view, setView] = useState<'list' | 'create' | 'join' | 'party'>(
     initialParty ? 'party' : (!isAuthenticated ? 'join' : 'list')
@@ -103,6 +104,10 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       ]);
       setPartySongs(songs);
       setPartyMembers(members);
+      // Notify parent component of song updates
+      if (onPartySongsUpdate && currentGuestName) {
+        onPartySongsUpdate(songs);
+      }
     } catch (err) {
       console.error('Failed to load party details:', err);
       // If party not found (404), it might have been ended
@@ -167,6 +172,10 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       ]);
       setPartySongs(songs);
       setPartyMembers(members);
+      // Notify parent component of initial song load
+      if (onPartySongsUpdate && guestName) {
+        onPartySongsUpdate(songs);
+      }
     } catch (err: any) {
       setError(err.message || 'Failed to join party');
     } finally {
