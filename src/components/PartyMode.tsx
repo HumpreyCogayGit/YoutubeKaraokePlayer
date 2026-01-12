@@ -21,6 +21,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
   const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [partyEnded, setPartyEnded] = useState(false);
   
   // Create party form
   const [partyName, setPartyName] = useState('');
@@ -86,11 +87,13 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       const partyDetails = await partyAPI.getParty(currentParty.id);
       
       if (!partyDetails.is_active) {
-        // Party has ended - close modal and show message
-        alert('This party has ended.');
-        setCurrentParty(null);
-        setView('list');
-        onClose();
+        // Party has ended - show message and close after 3 seconds
+        setPartyEnded(true);
+        setTimeout(() => {
+          setCurrentParty(null);
+          setView('list');
+          onClose();
+        }, 3000);
         return;
       }
       
@@ -104,10 +107,12 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       console.error('Failed to load party details:', err);
       // If party not found (404), it might have been ended
       if ((err as any).message?.includes('404') || (err as any).message?.includes('not found')) {
-        alert('This party has ended.');
-        setCurrentParty(null);
-        setView('list');
-        onClose();
+        setPartyEnded(true);
+        setTimeout(() => {
+          setCurrentParty(null);
+          setView('list');
+          onClose();
+        }, 3000);
       }
     }
   };
@@ -385,6 +390,16 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
         {/* Party View */}
         {view === 'party' && currentParty && (
           <div className="p-6">
+            {/* Party Ended Overlay */}
+            {partyEnded && (
+              <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+                <div className="bg-gray-800 border-2 border-red-500 rounded-lg p-8 text-center">
+                  <h2 className="text-4xl font-bold text-red-500 mb-4">Party Ended</h2>
+                  <p className="text-gray-300">Redirecting to home page...</p>
+                </div>
+              </div>
+            )}
+            
             <button
               onClick={() => { setCurrentParty(null); setView('list'); }}
               className="text-gray-400 hover:text-white mb-4"

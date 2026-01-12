@@ -31,6 +31,16 @@ function App() {
   const [partySongs, setPartySongs] = useState<PartySong[]>([])
   const [showSidebar, setShowSidebar] = useState(true)
 
+  // Check for QR code scan on mount
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    const partyCodeFromUrl = urlParams.get('party')
+    if (partyCodeFromUrl) {
+      // Automatically open Party Mode when QR code is scanned
+      setShowPartyMode(true)
+    }
+  }, [])
+
   const addToPlaylist = (item: PlaylistItem) => {
     setPlaylist(prev => [...prev, item])
   }
