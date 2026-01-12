@@ -97,10 +97,12 @@ function App() {
       const currentSong = partySongs.find(song => !song.played && song.video_id === displayPlaylist[currentIndex]?.id)
       if (currentSong) {
         try {
+          console.log('[App] Marking song as played:', currentSong.title)
           await partyAPI.markSongPlayed(hostParty.id, currentSong.id)
-          // Reload party data to update the queue
+          // Reload party data to update the queue with new array reference
           const songs = await partyAPI.getPartySongs(hostParty.id)
-          setPartySongs(songs)
+          console.log('[App] Reloaded party songs, total:', songs.length, 'unplayed:', songs.filter(s => !s.played).length)
+          setPartySongs([...songs]) // Force new array reference
         } catch (err) {
           console.error('Failed to mark song as played:', err)
         }
