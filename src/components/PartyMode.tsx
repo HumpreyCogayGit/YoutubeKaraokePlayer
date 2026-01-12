@@ -160,8 +160,13 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       }
       setView('party');
       loadParties();
-      // Load party details immediately for guests
-      await loadPartyDetails();
+      // Load party details immediately for guests using the party object directly
+      const [songs, members] = await Promise.all([
+        partyAPI.getPartySongs(party.id),
+        partyAPI.getPartyMembers(party.id)
+      ]);
+      setPartySongs(songs);
+      setPartyMembers(members);
     } catch (err: any) {
       setError(err.message || 'Failed to join party');
     } finally {

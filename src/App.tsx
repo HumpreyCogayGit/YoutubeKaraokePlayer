@@ -272,7 +272,7 @@ function App() {
               Youtube Karaoke Player by MangHumps
               <span className="ml-2 text-xs font-normal bg-yellow-600 text-yellow-100 px-2 py-1 rounded">BETA</span>
             </h1>
-            <p className="text-xs text-gray-400 mt-1">Build #{import.meta.env.VITE_BUILD_ID || import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'dev'}</p>
+            <p className="text-xs text-gray-400 mt-1">Build #{import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || import.meta.env.VITE_BUILD_ID || 'dev'}</p>
           </div>
           
           <div className="flex items-center gap-4">
