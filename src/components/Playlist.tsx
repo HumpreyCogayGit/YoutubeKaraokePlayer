@@ -47,8 +47,8 @@ const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear, isPartyPlayl
             {isPartyPlaylist ? 'Party Queue' : 'Playlist'} ({items.length})
           </h2>
           {isPartyPlaylist && partyName && (
-            <p className="text-xs text-purple-400 mt-1">
-              <span className="bg-purple-600 px-2 py-0.5 rounded">PARTY</span> {partyName}
+            <p className="text-xs text-emerald-400 mt-1">
+              <span className="bg-emerald-600 px-2 py-0.5 rounded">PARTY</span> {partyName}
             </p>
           )}
         </div>
@@ -126,7 +126,7 @@ const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear, isPartyPlayl
                 </h3>
                 <p className="text-gray-400 text-xs line-clamp-1">{item.channelTitle}</p>
                 {isPartyPlaylist && item.addedBy && (
-                  <p className="text-purple-400 text-xs mt-0.5">
+                  <p className="text-emerald-400 text-xs mt-0.5">
                     Added by: {item.addedBy}
                   </p>
                 )}

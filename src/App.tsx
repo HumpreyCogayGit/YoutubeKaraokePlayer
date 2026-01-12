@@ -84,30 +84,32 @@ function App() {
   }
 
   // Load host party and its songs
-  useEffect(() => {
+  const loadHostParty = async () => {
     if (!isAuthenticated) {
       setHostParty(null)
       setPartySongs([])
       return
     }
 
-    const loadHostParty = async () => {
-      try {
-        const parties = await partyAPI.getMyParties()
-        // Find the party where current user is the host
-        const myHostParty = parties.find(p => p.host_user_id === user?.id)
-        setHostParty(myHostParty || null)
-        
-        if (myHostParty) {
-          const songs = await partyAPI.getPartySongs(myHostParty.id)
-          setPartySongs(songs)
-        } else {
-          setPartySongs([])
-        }
-      } catch (err) {
-        console.error('Failed to load host party:', err)
+    try {
+      const parties = await partyAPI.getMyParties()
+      // Find the party where current user is the host
+      const myHostParty = parties.find(p => p.host_user_id === user?.id)
+      setHostParty(myHostParty || null)
+      
+      if (myHostParty) {
+        const songs = await partyAPI.getPartySongs(myHostParty.id)
+        setPartySongs(songs)
+      } else {
+        setPartySongs([])
       }
+    } catch (err) {
+      console.error('Failed to load host party:', err)
     }
+  }
+
+  useEffect(() => {
+    loadHostParty()
 
     loadHostParty()
     // Refresh every 5 seconds
@@ -254,9 +256,9 @@ function App() {
                         setShowPartyMode(true)
                         setShowUserMenu(false)
                       }}
-                      className="w-full px-4 py-2 text-left text-purple-400 hover:bg-gray-700 transition-colors"
+                      className="w-full px-4 py-2 text-left text-[#10b981] hover:bg-gray-700 transition-colors"
                     >
-                      🎉 Party Mode
+                      Party Mode
                     </button>
                     <button
                       onClick={() => {
@@ -274,7 +276,7 @@ function App() {
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => setShowPartyMode(true)}
-                  className="bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-full px-5 py-2 transition-all hover:scale-105 shadow-lg"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-full px-5 py-2 transition-all hover:scale-105 shadow-lg"
                 >
                   Join Party
                 </button>
@@ -409,6 +411,7 @@ function App() {
           onClose={() => {
             setShowPartyMode(false);
             setSelectedParty(null);
+            loadHostParty(); // Refresh host party data after closing
           }}
           onVideoSelect={setSelectedVideoId}
           initialParty={selectedParty}

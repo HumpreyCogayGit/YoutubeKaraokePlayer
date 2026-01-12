@@ -40,6 +40,16 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
 
   useEffect(() => {
     loadParties();
+    
+    // Check for party code in URL parameters (from QR code scan)
+    const urlParams = new URLSearchParams(window.location.search);
+    const partyCodeFromUrl = urlParams.get('party');
+    if (partyCodeFromUrl) {
+      setJoinCode(partyCodeFromUrl);
+      setView('join');
+      // Clear the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   useEffect(() => {
@@ -102,6 +112,10 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       setCurrentParty(party);
       setView('party');
       loadParties();
+      // Close the modal after successful creation
+      setTimeout(() => {
+        onClose();
+      }, 500);
     } catch (err: any) {
       setError(err.message || 'Failed to create party');
     } finally {
@@ -402,7 +416,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
             <div className="mb-6">
               <button
                 onClick={() => setShowSearch(!showSearch)}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-6 rounded-lg font-semibold"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-6 rounded-lg font-semibold"
               >
                 {showSearch ? 'Hide Search' : 'Add Song to Queue'}
               </button>
