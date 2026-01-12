@@ -182,6 +182,14 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
     }
   };
 
+  const handleLeaveParty = () => {
+    if (!confirm('Are you sure you want to leave this party?')) return;
+    setCurrentParty(null);
+    setCurrentGuestName(null);
+    setView('list');
+    onClose();
+  };
+
   const handleMarkPlayed = async (songId: number) => {
     if (!currentParty) return;
 
@@ -208,7 +216,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
         channel_title: item.channelTitle,
         guest_name: currentGuestName || undefined,
       });
-      loadPartyDetails();
+      // Reload party details to update the queue
+      await loadPartyDetails();
       setShowSearch(false);
     } catch (err: any) {
       setError(err.message || 'Failed to add song');
@@ -222,7 +231,14 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
         <div className="p-4 border-b border-gray-700 flex justify-between items-center sticky top-0 bg-gray-800 z-10">
           <h2 className="text-2xl font-bold text-white">Party Mode</h2>
           <button
-            onClick={onClose}
+            onClick={() => {
+              // If guest is in a party, minimize instead of fully closing
+              if (view === 'party' && currentParty && currentParty.host_user_id !== user?.id && currentGuestName) {
+                onClose(); // Just minimize, keep party connection
+              } else {
+                onClose();
+              }
+            }}
             className="text-gray-400 hover:text-white text-2xl"
           >
             ×
@@ -529,6 +545,16 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
                 className="w-full mt-6 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded font-semibold"
               >
                 End Party
+              </button>
+            )}
+            
+            {/* Leave Party Button (Guest only) */}
+            {currentParty.host_user_id !== user?.id && (
+              <button
+                onClick={handleLeaveParty}
+                className="w-full mt-6 bg-gray-600 hover:bg-gray-500 text-white py-2 px-4 rounded font-semibold"
+              >
+                Leave Party
               </button>
             )}
           </div>
