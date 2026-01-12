@@ -104,8 +104,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
       ]);
       setPartySongs(songs);
       setPartyMembers(members);
-      // Notify parent component of song updates
-      if (onPartySongsUpdate && currentGuestName) {
+      // Notify parent component of song updates (for guests viewing on main screen)
+      if (onPartySongsUpdate) {
         onPartySongsUpdate(songs);
       }
     } catch (err) {
@@ -173,7 +173,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
       setPartySongs(songs);
       setPartyMembers(members);
       // Notify parent component of initial song load
-      if (onPartySongsUpdate && guestName) {
+      if (onPartySongsUpdate) {
         onPartySongsUpdate(songs);
       }
     } catch (err: any) {

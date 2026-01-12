@@ -507,9 +507,7 @@ function App() {
           initialParty={selectedParty}
           onPartySongsUpdate={(songs) => {
             // Update guest party songs in real-time when modal is open
-            if (guestParty) {
-              setGuestPartySongs(songs);
-            }
+            setGuestPartySongs(songs);
           }}
         />
       )}
