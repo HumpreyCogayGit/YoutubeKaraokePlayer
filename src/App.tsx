@@ -59,9 +59,13 @@ function App() {
       {/* Header */}
       <header className="bg-gray-800 shadow-sm border-b border-gray-700">
         <div className="px-4 py-3 flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-white tracking-tight">
-            Youtube Karaoke Player by MangHumps
-          </h1>
+          <div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              Youtube Karaoke Player by MangHumps
+              <span className="ml-2 text-xs font-normal bg-yellow-600 text-yellow-100 px-2 py-1 rounded">BETA</span>
+            </h1>
+            <p className="text-xs text-gray-400 mt-1">Build #{Date.now().toString().slice(-8)}</p>
+          </div>
           
           <div className="flex items-center gap-4">
             {isAuthenticated ? (
