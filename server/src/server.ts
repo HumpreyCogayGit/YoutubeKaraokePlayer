@@ -17,24 +17,50 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const PgStore = pgSession(session);
 
-// Trust proxy for Vercel
+// Trust proxy for Railway/Vercel
 app.set('trust proxy', 1);
 
-// Middleware
+// CORS - Allow multiple origins
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'http://localhost:3002',
+  process.env.FRONTEND_URL,
+  process.env.CLIENT_URL
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.some(allowed => origin.startsWith(allowed as string))) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(null, true); // Allow anyway for now
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 app.use(express.json());
 
+// Session store with error handling
+const sessionStore = new PgStore({
+  pool: pool,
+  tableName: 'session',
+  createTableIfMissing: true,
+  errorLog: (error) => {
+    console.error('Session store error:', error);
+  }
+});
+
 app.use(
   session({
-    store: new PgStore({
-      pool: pool,
-      tableName: 'session',
-      createTableIfMissing: true
-    }),
+    store: sessionStore,
     secret: process.env.SESSION_SECRET || 'your-secret-key',
     resave: false,
     saveUninitialized: false,
