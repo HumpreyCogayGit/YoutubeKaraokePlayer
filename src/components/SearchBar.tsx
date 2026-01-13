@@ -268,12 +268,6 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
 
       {/* Search Results */}
       <div className="overflow-y-auto space-y-2 max-h-[350px]">
-        {searchResults.length === 0 && !isLoading && (
-          <p className="text-gray-400 text-center py-8">
-            Search for your favorite karaoke songs
-          </p>
-        )}
-        
         {sortedResults.map((result) => (
           <div
             key={result.id}
