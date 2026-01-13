@@ -14,7 +14,9 @@ import pool from './db.js';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+//const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
+
 const PgStore = pgSession(session);
 
 // Trust proxy for Railway/Vercel
