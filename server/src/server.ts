@@ -109,6 +109,7 @@ const HOST = process.env.HOST || '0.0.0.0';
 
 
 const server = app.listen(PORT, HOST, () => {
+  console.log(`Manghumps Logging Server started`);
   console.log(`Server running on ${HOST}:${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
