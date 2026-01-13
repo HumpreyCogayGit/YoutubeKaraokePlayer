@@ -15,11 +15,16 @@ export function initPartyStreamRoutes(pool: Pool) {
       return res.status(400).json({ error: 'Invalid party ID' });
     }
 
-    // Set headers for SSE
+    // Set headers for SSE - MUST be set before any writes
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
+    res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    // Flush headers immediately
+    res.flushHeaders();
     
     // Send initial connection confirmation
     res.write(`data: ${JSON.stringify({ type: 'connected', partyId })}\n\n`);
@@ -35,11 +40,13 @@ export function initPartyStreamRoutes(pool: Pool) {
     // Send initial party data
     try {
       const songsResult = await pool.query(
-        `SELECT ps.*, u.name as added_by_name, u.profile_picture as added_by_picture
+        `SELECT ps.*, 
+         COALESCE(u.name, ps.added_by_guest_name, 'Unknown') as added_by_name,
+         u.profile_picture as added_by_picture
          FROM party_songs ps
          LEFT JOIN users u ON ps.added_by_user_id = u.id
          WHERE ps.party_id = $1
-         ORDER BY ps.added_at ASC`,
+         ORDER BY ps.played ASC, ps.added_at ASC`,
         [partyId]
       );
 

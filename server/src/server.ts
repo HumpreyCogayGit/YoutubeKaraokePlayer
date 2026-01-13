@@ -10,6 +10,7 @@ import userRoutes from './routes/user.js';
 import partyRoutes from './routes/party.js';
 import { initPartyStreamRoutes } from './routes/party-stream.js';
 import pool from './db.js';
+import { runMigrations } from './migrations.js';
 
 dotenv.config();
 
@@ -44,7 +45,7 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -107,21 +108,28 @@ app.get('/', (req, res) => {
 
 const HOST = process.env.HOST || '0.0.0.0';
 
+// Run migrations before starting server
+runMigrations()
+  .then(() => {
+    const server = app.listen(PORT, HOST, () => {
+      console.log(`Manghumps Logging Server started`);
+      console.log(`Server running on ${HOST}:${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
+    });
 
-const server = app.listen(PORT, HOST, () => {
-  console.log(`Manghumps Logging Server started`);
-  console.log(`Server running on ${HOST}:${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
-});
-
-server.on('error', (error: NodeJS.ErrnoException) => {
-  console.error('Server error:', error);
-  if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use`);
-  }
-  process.exit(1);
-});
+    server.on('error', (error: NodeJS.ErrnoException) => {
+      console.error('Server error:', error);
+      if (error.code === 'EADDRINUSE') {
+        console.error(`Port ${PORT} is already in use`);
+      }
+      process.exit(1);
+    });
+  })
+  .catch((error) => {
+    console.error('Failed to run migrations:', error);
+    process.exit(1);
+  });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
