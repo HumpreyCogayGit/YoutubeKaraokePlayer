@@ -196,7 +196,7 @@ export const PartyProvider = ({ children, userId, userName }: PartyProviderProps
     // Polling fallback if SSE disabled
     if (!useSSE) {
       console.log('[PartyContext] Using polling mode')
-      const interval = setInterval(refreshSongs, 5000)
+      const interval = setInterval(refreshSongs, 15000) // Poll every 15 seconds to avoid rate limiting
 
       // Handle page visibility changes
       const handleVisibilityChange = () => {

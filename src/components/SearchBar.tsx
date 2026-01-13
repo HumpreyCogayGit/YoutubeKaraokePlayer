@@ -55,18 +55,6 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
     return sanitized
   }
 
-  // Security: Validate API response data
-  const validateVideoData = (item: any): boolean => {
-    return (
-      item &&
-      typeof item.id === 'string' &&
-      item.snippet &&
-      typeof item.snippet.title === 'string' &&
-      typeof item.snippet.channelTitle === 'string' &&
-      item.snippet.thumbnails?.medium?.url
-    )
-  }
-
   const handleSearch = async (e: FormEvent) => {
     e.preventDefault()
     
@@ -90,19 +78,14 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
     setIsLoading(true)
     setError(null)
     
-    const API_KEY = import.meta.env.VITE_YOUTUBE_API_KEY
-    
-    if (!API_KEY) {
-      setError('YouTube API key not configured. Please add VITE_YOUTUBE_API_KEY to your .env file.')
-      setIsLoading(false)
-      return
-    }
-    
-    // Security: Use template literals safely with encodeURIComponent
-    const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=20&q=${encodeURIComponent(sanitizedQuery + ' karaoke')}&type=video&key=${API_KEY}`
+    // Use backend proxy to protect API key
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const searchUrl = `${API_URL}/api/youtube/search?q=${encodeURIComponent(sanitizedQuery)}`
 
     try {
-      const searchResponse = await fetch(searchUrl)
+      const searchResponse = await fetch(searchUrl, {
+        credentials: 'include'
+      })
       
       // Security: Check response status
       if (!searchResponse.ok) {
@@ -116,34 +99,10 @@ const SearchBar = ({ onVideoSelect, onAddToPlaylist }: SearchBarProps) => {
         throw new Error('Invalid API response')
       }
       
-      if (searchData.items.length > 0) {
-        const videoIds = searchData.items.map((item: any) => item.id.videoId).join(',')
-        
-        const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,snippet&id=${videoIds}&key=${API_KEY}`
-        const statsResponse = await fetch(statsUrl)
-        
-        if (!statsResponse.ok) {
-          throw new Error(`Stats API error: ${statsResponse.status}`)
-        }
-        
-        const statsData = await statsResponse.json()
-        
-        if (statsData.items && Array.isArray(statsData.items)) {
-          // Security: Validate and sanitize each result
-          const results: SearchResult[] = statsData.items
-            .filter(validateVideoData)
-            .map((item: any) => ({
-              id: String(item.id).slice(0, 100), // Limit ID length
-              title: String(item.snippet.title).slice(0, 500), // Limit title length
-              thumbnail: String(item.snippet.thumbnails.medium.url).slice(0, 500),
-              channelTitle: String(item.snippet.channelTitle).slice(0, 200),
-              viewCount: Math.min(parseInt(item.statistics.viewCount || '0'), Number.MAX_SAFE_INTEGER),
-              likeCount: Math.min(parseInt(item.statistics.likeCount || '0'), Number.MAX_SAFE_INTEGER)
-            }))
-          
-          setSearchResults(results)
-        }
-      }
+      // Backend already fetches stats and sanitizes data
+      const results: SearchResult[] = searchData.items
+      
+      setSearchResults(results)
     } catch (error) {
       // Security: Don't expose detailed error messages to users
       console.error('Error searching videos:', error)

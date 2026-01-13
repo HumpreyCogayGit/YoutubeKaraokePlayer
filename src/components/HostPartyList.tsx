@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { partyAPI, Party, PartyMember } from '../api/party';
+import QRCode from 'qrcode';
 
 interface HostPartyListProps {
   onSelectParty: (party: Party) => void;
@@ -14,9 +15,20 @@ const HostPartyList = ({ onSelectParty }: HostPartyListProps) => {
 
   useEffect(() => {
     loadHostParty();
-    // Refresh every 10 seconds
-    const interval = setInterval(loadHostParty, 10000);
-    return () => clearInterval(interval);
+    
+    // Refresh every 30 seconds to avoid rate limiting
+    const interval = setInterval(loadHostParty, 30000);
+    
+    // Listen for immediate refresh events
+    const handlePartyUpdate = () => {
+      loadHostParty();
+    };
+    window.addEventListener('party-updated', handlePartyUpdate);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('party-updated', handlePartyUpdate);
+    };
   }, []);
 
   useEffect(() => {
@@ -49,21 +61,39 @@ const HostPartyList = ({ onSelectParty }: HostPartyListProps) => {
     }
   };
 
-  const generateQRCode = () => {
+  const generateQRCode = async () => {
     if (!hostParty) return;
-    const joinUrl = `${window.location.origin}?party=${hostParty.code}`;
-    const qrData = encodeURIComponent(joinUrl);
-    setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`);
+    try {
+      const joinUrl = `${window.location.origin}?party=${hostParty.code}`;
+      const qrDataUrl = await QRCode.toDataURL(joinUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeUrl(qrDataUrl);
+    } catch (err) {
+      console.error('Failed to generate QR code:', err);
+    }
   };
 
-  if (loading) {
+  if (!hostParty && !loading) {
     return null;
   }
 
-  if (!hostParty) {
-    return null;
+  if (loading || !hostParty) {
+    return (
+      <div className="bg-[#10b981] rounded-lg p-4 shadow-lg border-2 border-emerald-400">
+        <div className="flex items-center justify-center py-8">
+          <div className="text-white">Loading party...</div>
+        </div>
+      </div>
+    );
   }
 
+  // At this point, hostParty is guaranteed to be non-null
   return (
     <div className="bg-[#10b981] rounded-lg p-4 shadow-lg border-2 border-emerald-400">
       <div className="flex items-center justify-between mb-3">

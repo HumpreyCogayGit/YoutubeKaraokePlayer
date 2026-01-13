@@ -4,6 +4,7 @@ import { PlaylistItem } from '../App';
 import SearchBar from './SearchBar';
 import { useAuth } from '../contexts/AuthContext';
 import { useParty } from '../contexts/PartyContext';
+import QRCode from 'qrcode';
 
 interface PartyModeProps {
   onClose: () => void;
@@ -97,10 +98,20 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
   const generateQRCode = async () => {
     if (!activeParty) return;
     
-    // Simple data URL encoding for QR code (you can enhance this)
-    const joinUrl = `${window.location.origin}?party=${activeParty.code}`;
-    const qrData = encodeURIComponent(joinUrl);
-    setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`);
+    try {
+      const joinUrl = `${window.location.origin}?party=${activeParty.code}`;
+      const qrDataUrl = await QRCode.toDataURL(joinUrl, {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setQrCodeUrl(qrDataUrl);
+    } catch (err) {
+      console.error('Failed to generate QR code:', err);
+    }
   };
 
   const handleCreateParty = async (e: React.FormEvent) => {
@@ -112,6 +123,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       await createParty(partyName, partyPassword);
       setView('party');
       loadParties();
+      // Trigger immediate refresh of HostPartyList
+      window.dispatchEvent(new CustomEvent('party-updated'));
       // Close the modal after successful creation
       setTimeout(() => {
         onClose();
@@ -147,6 +160,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
       await endParty();
       setView('list');
       loadParties();
+      // Trigger immediate refresh of HostPartyList
+      window.dispatchEvent(new CustomEvent('party-updated'));
     } catch (err: any) {
       setError(err.message || 'Failed to end party');
     }
@@ -299,8 +314,13 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => 
                   onChange={(e) => setPartyPassword(e.target.value)}
                   className="w-full bg-gray-700 text-white px-4 py-2 rounded border border-gray-600 focus:border-blue-500 outline-none"
                   placeholder="Create a password for your party"
+                  minLength={8}
+                  maxLength={128}
                   required
                 />
+                <p className="text-xs text-gray-400 mt-1">
+                  Must be 8-128 characters
+                </p>
               </div>
               <button
                 type="submit"

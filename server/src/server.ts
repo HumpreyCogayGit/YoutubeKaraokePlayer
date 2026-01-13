@@ -3,11 +3,13 @@ import cors from 'cors';
 import session from 'express-session';
 import pgSession from 'connect-pg-simple';
 import dotenv from 'dotenv';
+import { generalLimiter, authLimiter } from './middleware/rateLimiter.js';
 import passport from './auth.js';
 import authRoutes from './routes/auth.js';
 import playlistRoutes from './routes/playlists.js';
 import userRoutes from './routes/user.js';
 import partyRoutes from './routes/party.js';
+import youtubeRoutes from './routes/youtube.js';
 import { initPartyStreamRoutes } from './routes/party-stream.js';
 import pool from './db.js';
 import { runMigrations } from './migrations.js';
@@ -64,6 +66,10 @@ app.use(cors({
 
 app.use(express.json());
 
+// Security: Rate limiting to prevent abuse and DoS attacks
+// Apply general rate limiter to all API routes
+app.use('/api', generalLimiter);
+
 // Session store with error handling
 const sessionStore = new PgStore({
   pool: pool,
@@ -92,11 +98,12 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Routes
-app.use('/auth', authRoutes);
+// Routes with rate limiting
+app.use('/auth', authLimiter, authRoutes);
 app.use('/api/playlists', playlistRoutes);
 app.use('/api/user', userRoutes);
-app.use('/api/party', partyRoutes);
+app.use('/api/party', partyRoutes); // Party routes get general limiter from /api prefix
+app.use('/api/youtube', youtubeRoutes); // YouTube proxy with rate limiting
 app.use(initPartyStreamRoutes(pool)); // SSE routes
 
 // Health check

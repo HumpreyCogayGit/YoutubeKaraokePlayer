@@ -204,7 +204,7 @@ function App() {
         <div className="px-4 py-3 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              Youtube Karaoke Player by MangHumps
+              Youtube Karaoke Player 
               <span className="ml-2 text-xs font-normal bg-yellow-600 text-yellow-100 px-2 py-1 rounded">BETA</span>
             </h1>
             <p className="text-xs text-gray-400 mt-1">Build #{import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || import.meta.env.VITE_BUILD_ID || 'dev'}</p>
@@ -298,15 +298,9 @@ function App() {
       {/* Main Content */}
       <div className="h-[calc(100vh-73px)] px-4 py-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 h-full">
-          {/* Left Sidebar - Search & Playlist */}
+          {/* Left Sidebar - Party & Playlist */}
           {showSidebar && (
             <div className="lg:col-span-4 xl:col-span-3 flex flex-col gap-4 h-full overflow-y-auto">
-              <div className="flex-shrink-0">
-                <SearchBar 
-                  onVideoSelect={setSelectedVideoId}
-                  onAddToPlaylist={handleAddToPlaylist}
-                />
-              </div>
               {isAuthenticated && (
                 <div className="flex-shrink-0">
                   <HostPartyList 
@@ -317,6 +311,12 @@ function App() {
                   />
                 </div>
               )}
+              <div className="flex-shrink-0">
+                <SearchBar 
+                  onVideoSelect={setSelectedVideoId}
+                  onAddToPlaylist={handleAddToPlaylist}
+                />
+              </div>
               <div className="flex-shrink-0">
                 {/* Manual refresh button for guests on mobile */}
                 {isGuest && (

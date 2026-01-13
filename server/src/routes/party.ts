@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import pool from '../db.js';
 import { broadcastPartyUpdate } from './party-stream.js';
 import bcrypt from 'bcrypt';
+import { partyActionLimiter } from '../middleware/rateLimiter.js';
 
 const router = Router();
 
@@ -47,7 +48,7 @@ const generatePartyCode = (): string => {
 };
 
 // Create a new party
-router.post('/create', isAuthenticated, async (req: Request, res: Response) => {
+router.post('/create', partyActionLimiter, isAuthenticated, async (req: Request, res: Response) => {
   try {
     const { name, password } = req.body;
     const userId = (req.user as any).id;
@@ -109,7 +110,7 @@ router.post('/create', isAuthenticated, async (req: Request, res: Response) => {
 });
 
 // Join a party
-router.post('/join', async (req: Request, res: Response) => {
+router.post('/join', partyActionLimiter, async (req: Request, res: Response) => {
   try {
     const { code, password, guest_name } = req.body;
     const userId = req.isAuthenticated() ? (req.user as any).id : null;
