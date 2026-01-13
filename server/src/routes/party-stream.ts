@@ -9,10 +9,18 @@ const activeConnections = new Map<number, Set<Response>>();
 export function initPartyStreamRoutes(pool: Pool) {
   // SSE endpoint for party updates
   router.get('/api/party/:partyId/stream', async (req: Request, res: Response) => {
-    const partyId = parseInt(req.params.partyId);
+    // Security: Validate partyId to prevent SQL injection
+    const partyIdStr = req.params.partyId;
     
-    if (isNaN(partyId)) {
-      return res.status(400).json({ error: 'Invalid party ID' });
+    // Validate numeric format before parsing
+    if (!/^\d+$/.test(partyIdStr)) {
+      return res.status(400).json({ error: 'Invalid party ID format' });
+    }
+    
+    const partyId = parseInt(partyIdStr, 10);
+    
+    if (isNaN(partyId) || partyId <= 0 || partyId > 2147483647) {
+      return res.status(400).json({ error: 'Invalid party ID: out of valid range' });
     }
 
     // Set headers for SSE - MUST be set before any writes

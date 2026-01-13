@@ -14,6 +14,19 @@ import { runMigrations } from './migrations.js';
 
 dotenv.config();
 
+// Security: Validate required environment variables
+if (!process.env.SESSION_SECRET) {
+  console.error('FATAL: SESSION_SECRET environment variable is required');
+  console.error('Generate a strong secret with: openssl rand -base64 32');
+  process.exit(1);
+}
+
+if (process.env.SESSION_SECRET.length < 32) {
+  console.error('FATAL: SESSION_SECRET must be at least 32 characters long');
+  console.error('Current length:', process.env.SESSION_SECRET.length);
+  process.exit(1);
+}
+
 const app = express();
 //const PORT = process.env.PORT || 5000;
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -64,7 +77,7 @@ const sessionStore = new PgStore({
 app.use(
   session({
     store: sessionStore,
-    secret: process.env.SESSION_SECRET || 'your-secret-key',
+    secret: process.env.SESSION_SECRET!, // No fallback - required and validated at startup
     resave: false,
     saveUninitialized: false,
     cookie: {

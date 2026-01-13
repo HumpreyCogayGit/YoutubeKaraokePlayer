@@ -1,8 +1,37 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db.js';
 import { broadcastPartyUpdate } from './party-stream.js';
+import bcrypt from 'bcrypt';
 
 const router = Router();
+
+// Security: Validate numeric IDs to prevent SQL injection
+const validateNumericId = (id: string, paramName: string): number => {
+  // Check if the string contains only digits
+  if (!/^\d+$/.test(id)) {
+    throw new Error(`Invalid ${paramName}: must be a positive integer`);
+  }
+  
+  const numericId = parseInt(id, 10);
+  
+  // Additional checks for NaN and range
+  if (isNaN(numericId) || numericId <= 0 || numericId > 2147483647) {
+    throw new Error(`Invalid ${paramName}: out of valid range`);
+  }
+  
+  return numericId;
+};
+
+// Security: Password strength validation
+const validatePassword = (password: string): { valid: boolean; error?: string } => {
+  if (!password || password.length < 8) {
+    return { valid: false, error: 'Password must be at least 8 characters long' };
+  }
+  if (password.length > 128) {
+    return { valid: false, error: 'Password must not exceed 128 characters' };
+  }
+  return { valid: true };
+};
 
 // Middleware to check authentication
 const isAuthenticated = (req: Request, res: Response, next: any) => {
@@ -27,6 +56,12 @@ router.post('/create', isAuthenticated, async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Name and password required' });
     }
 
+    // Security: Validate password strength
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.valid) {
+      return res.status(400).json({ error: passwordValidation.error });
+    }
+
     // Check if user already has an active party as host
     const existingParty = await pool.query(
       'SELECT id FROM parties WHERE host_user_id = $1 AND is_active = true',
@@ -48,11 +83,15 @@ router.post('/create', isAuthenticated, async (req: Request, res: Response) => {
       attempts++;
     }
 
+    // Security: Hash password with bcrypt
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
     const result = await pool.query(
       `INSERT INTO parties (host_user_id, name, password, code) 
        VALUES ($1, $2, $3, $4) 
-       RETURNING *`,
-      [userId, name, password, code]
+       RETURNING id, host_user_id, name, code, is_active, created_at, ended_at`,
+      [userId, name, hashedPassword, code]
     );
 
     // Auto-join host as member
@@ -61,6 +100,7 @@ router.post('/create', isAuthenticated, async (req: Request, res: Response) => {
       [result.rows[0].id, userId]
     );
 
+    // Security: Never return password hash to client
     res.json(result.rows[0]);
   } catch (error) {
     console.error('Create party error:', error);
@@ -94,7 +134,9 @@ router.post('/join', async (req: Request, res: Response) => {
 
     const party = partyResult.rows[0];
 
-    if (party.password !== password) {
+    // Security: Use bcrypt.compare for password verification
+    const passwordMatch = await bcrypt.compare(password, party.password);
+    if (!passwordMatch) {
       return res.status(401).json({ error: 'Incorrect password' });
     }
 
@@ -114,7 +156,9 @@ router.post('/join', async (req: Request, res: Response) => {
       }
     }
 
-    res.json(party);
+    // Security: Never return password hash to client
+    const { password: _, ...partyWithoutPassword } = party;
+    res.json(partyWithoutPassword);
   } catch (error) {
     console.error('Join party error:', error);
     res.status(500).json({ error: 'Failed to join party' });
@@ -127,7 +171,8 @@ router.get('/my-parties', isAuthenticated, async (req: Request, res: Response) =
     const userId = (req.user as any).id;
 
     const result = await pool.query(
-      `SELECT p.*, u.name as host_name,
+      `SELECT p.id, p.host_user_id, p.name, p.code, p.is_active, p.created_at, p.ended_at,
+       u.name as host_name,
        (SELECT COUNT(*) FROM party_members WHERE party_id = p.id) + 
        (SELECT COUNT(DISTINCT added_by_guest_name) FROM party_songs WHERE party_id = p.id AND added_by_guest_name IS NOT NULL) as member_count,
        (SELECT COUNT(*) FROM party_songs WHERE party_id = p.id AND played = false) as pending_songs
@@ -139,6 +184,7 @@ router.get('/my-parties', isAuthenticated, async (req: Request, res: Response) =
       [userId]
     );
 
+    // Security: Password is excluded from SELECT query
     res.json(result.rows);
   } catch (error) {
     console.error('Get parties error:', error);
@@ -149,7 +195,8 @@ router.get('/my-parties', isAuthenticated, async (req: Request, res: Response) =
 // Get party details
 router.get('/:partyId', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { partyId } = req.params;
+    // Security: Validate partyId to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
     const userId = (req.user as any).id;
 
     // Check if user is a member
@@ -163,7 +210,8 @@ router.get('/:partyId', isAuthenticated, async (req: Request, res: Response) => 
     }
 
     const partyResult = await pool.query(
-      `SELECT p.*, u.name as host_name, u.profile_picture as host_picture
+      `SELECT p.id, p.host_user_id, p.name, p.code, p.is_active, p.created_at, p.ended_at,
+              u.name as host_name, u.profile_picture as host_picture
        FROM parties p
        JOIN users u ON p.host_user_id = u.id
        WHERE p.id = $1`,
@@ -174,6 +222,7 @@ router.get('/:partyId', isAuthenticated, async (req: Request, res: Response) => 
       return res.status(404).json({ error: 'Party not found' });
     }
 
+    // Security: Password is excluded from SELECT query
     res.json(partyResult.rows[0]);
   } catch (error) {
     console.error('Get party error:', error);
@@ -184,7 +233,8 @@ router.get('/:partyId', isAuthenticated, async (req: Request, res: Response) => 
 // Get party songs
 router.get('/:partyId/songs', async (req: Request, res: Response) => {
   try {
-    const { partyId } = req.params;
+    // Security: Validate partyId to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
 
     const result = await pool.query(
       `SELECT ps.*, 
@@ -206,7 +256,8 @@ router.get('/:partyId/songs', async (req: Request, res: Response) => {
 // Add song to party
 router.post('/:partyId/songs', async (req: Request, res: Response) => {
   try {
-    const { partyId } = req.params;
+    // Security: Validate partyId to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
     const { video_id, title, thumbnail, channel_title, guest_name } = req.body;
     const userId = req.isAuthenticated() ? (req.user as any).id : null;
 
@@ -247,7 +298,7 @@ router.post('/:partyId/songs', async (req: Request, res: Response) => {
     console.log('[Party] Song added, broadcasting to party', partyId, ':', songWithName.rows[0].title);
 
     // Broadcast update to all connected clients with the complete song data
-    broadcastPartyUpdate(parseInt(partyId), {
+    broadcastPartyUpdate(partyId, {
       type: 'song_added',
       song: songWithName.rows[0]
     });
@@ -262,7 +313,9 @@ router.post('/:partyId/songs', async (req: Request, res: Response) => {
 // Mark song as played
 router.patch('/:partyId/songs/:songId/played', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { partyId, songId } = req.params;
+    // Security: Validate IDs to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
+    const songId = validateNumericId(req.params.songId, 'songId');
     const userId = (req.user as any).id;
 
     // Check if user is the host
@@ -285,9 +338,9 @@ router.patch('/:partyId/songs/:songId/played', isAuthenticated, async (req: Requ
     );
 
     // Broadcast update to all connected clients
-    broadcastPartyUpdate(parseInt(partyId), {
+    broadcastPartyUpdate(partyId, {
       type: 'song_played',
-      songId: parseInt(songId)
+      songId: songId
     });
 
     res.json({ success: true });
@@ -300,9 +353,16 @@ router.patch('/:partyId/songs/:songId/played', isAuthenticated, async (req: Requ
 // Reorder song (move up/down in queue)
 router.patch('/:partyId/songs/:songId/reorder', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { partyId, songId } = req.params;
+    // Security: Validate IDs to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
+    const songId = validateNumericId(req.params.songId, 'songId');
     const { direction } = req.body; // 'up' or 'down'
     const userId = (req.user as any).id;
+
+    // Validate direction
+    if (!direction || !['up', 'down'].includes(direction)) {
+      return res.status(400).json({ error: 'Invalid direction. Must be "up" or "down"' });
+    }
 
     // Check if user is the host
     const partyCheck = await pool.query(
@@ -327,7 +387,7 @@ router.patch('/:partyId/songs/:songId/reorder', isAuthenticated, async (req: Req
     );
 
     const songs = songsResult.rows;
-    const currentIndex = songs.findIndex(s => s.id === parseInt(songId));
+    const currentIndex = songs.findIndex(s => s.id === songId);
 
     if (currentIndex === -1) {
       return res.status(404).json({ error: 'Song not found or already played' });
@@ -371,7 +431,7 @@ router.patch('/:partyId/songs/:songId/reorder', isAuthenticated, async (req: Req
         [partyId]
       );
 
-      broadcastPartyUpdate(parseInt(partyId), {
+      broadcastPartyUpdate(partyId, {
         type: 'songs',
         songs: updatedSongs.rows
       });
@@ -390,7 +450,9 @@ router.patch('/:partyId/songs/:songId/reorder', isAuthenticated, async (req: Req
 // Delete song from party
 router.delete('/:partyId/songs/:songId', async (req: Request, res: Response) => {
   try {
-    const { partyId, songId } = req.params;
+    // Security: Validate IDs to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
+    const songId = validateNumericId(req.params.songId, 'songId');
     const { guest_name } = req.body;
     const userId = req.isAuthenticated() ? (req.user as any).id : null;
 
@@ -450,7 +512,7 @@ router.delete('/:partyId/songs/:songId', async (req: Request, res: Response) => 
 
     console.log('[Party] Broadcasting', updatedSongs.rows.length, 'songs to party', partyId);
 
-    broadcastPartyUpdate(parseInt(partyId), {
+    broadcastPartyUpdate(partyId, {
       type: 'songs',
       songs: updatedSongs.rows
     });
@@ -465,7 +527,8 @@ router.delete('/:partyId/songs/:songId', async (req: Request, res: Response) => 
 // End party
 router.post('/:partyId/end', isAuthenticated, async (req: Request, res: Response) => {
   try {
-    const { partyId } = req.params;
+    // Security: Validate partyId to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
     const userId = (req.user as any).id;
 
     // Check if user is the host
@@ -497,7 +560,8 @@ router.post('/:partyId/end', isAuthenticated, async (req: Request, res: Response
 // Get party members
 router.get('/:partyId/members', async (req: Request, res: Response) => {
   try {
-    const { partyId } = req.params;
+    // Security: Validate partyId to prevent SQL injection
+    const partyId = validateNumericId(req.params.partyId, 'partyId');
 
     // Get authenticated members
     const authMembers = await pool.query(

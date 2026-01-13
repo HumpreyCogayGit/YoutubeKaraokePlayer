@@ -3,6 +3,18 @@ import pool from '../db.js';
 
 const router = express.Router();
 
+// Security: Validate numeric IDs to prevent SQL injection
+const validateNumericId = (id: string, paramName: string): number => {
+  if (!/^\d+$/.test(id)) {
+    throw new Error(`Invalid ${paramName}: must be a positive integer`);
+  }
+  const numericId = parseInt(id, 10);
+  if (isNaN(numericId) || numericId <= 0 || numericId > 2147483647) {
+    throw new Error(`Invalid ${paramName}: out of valid range`);
+  }
+  return numericId;
+};
+
 // Middleware to check authentication
 const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (!req.isAuthenticated()) {
@@ -30,7 +42,8 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     const user = req.user as any;
-    const playlistId = req.params.id;
+    // Security: Validate playlist ID to prevent SQL injection
+    const playlistId = validateNumericId(req.params.id, 'playlist ID');
 
     const playlistResult = await pool.query(
       'SELECT * FROM playlists WHERE id = $1 AND user_id = $2',
@@ -92,7 +105,8 @@ router.post('/', requireAuth, async (req, res) => {
 router.put('/:id', requireAuth, async (req, res) => {
   try {
     const user = req.user as any;
-    const playlistId = req.params.id;
+    // Security: Validate playlist ID to prevent SQL injection
+    const playlistId = validateNumericId(req.params.id, 'playlist ID');
     const { name, items } = req.body;
 
     // Verify ownership
@@ -139,7 +153,8 @@ router.put('/:id', requireAuth, async (req, res) => {
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
     const user = req.user as any;
-    const playlistId = req.params.id;
+    // Security: Validate playlist ID to prevent SQL injection
+    const playlistId = validateNumericId(req.params.id, 'playlist ID');
 
     const result = await pool.query(
       'DELETE FROM playlists WHERE id = $1 AND user_id = $2 RETURNING *',

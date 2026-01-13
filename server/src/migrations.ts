@@ -16,8 +16,6 @@ export async function runMigrations() {
     console.log('✓ Migration: added_by_guest_name column added/verified');
 
     // Add more migrations here as needed
-    // Migration 2: Example
-    // await pool.query(`...`);
     
     console.log('All migrations completed successfully');
   } catch (error) {
