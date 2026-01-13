@@ -78,7 +78,26 @@ app.get('/', (req, res) => {
 });
 
 const HOST = process.env.HOST || '0.0.0.0';
-app.listen(PORT, HOST, () => {
+
+const server = app.listen(PORT, HOST, () => {
   console.log(`Server running on ${HOST}:${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Database: ${process.env.DATABASE_URL ? 'Connected' : 'Not configured'}`);
+});
+
+server.on('error', (error: NodeJS.ErrnoException) => {
+  console.error('Server error:', error);
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use`);
+  }
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
 });
