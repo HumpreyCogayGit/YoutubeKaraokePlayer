@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js';
 import playlistRoutes from './routes/playlists.js';
 import userRoutes from './routes/user.js';
 import partyRoutes from './routes/party.js';
+import { initPartyStreamRoutes } from './routes/party-stream.js';
 import pool from './db.js';
 
 dotenv.config();
@@ -21,7 +22,7 @@ app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: process.env.FRONTEND_URL || process.env.CLIENT_URL || 'http://localhost:3000',
   credentials: true,
 }));
 
@@ -54,6 +55,7 @@ app.use('/auth', authRoutes);
 app.use('/api/playlists', playlistRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/party', partyRoutes);
+app.use(initPartyStreamRoutes(pool)); // SSE routes
 
 // Health check
 app.get('/health', (req, res) => {

@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import pool from '../db.js';
+import { broadcastPartyUpdate } from './party-stream.js';
 
 const router = Router();
 
@@ -233,7 +234,25 @@ router.post('/:partyId/songs', async (req: Request, res: Response) => {
       [partyId, video_id, title, thumbnail, channel_title, userId, guest_name || null]
     );
 
-    res.json(result.rows[0]);
+    // Fetch the song with added_by_name
+    const songWithName = await pool.query(
+      `SELECT ps.*, 
+       COALESCE(u.name, ps.added_by_guest_name, 'Unknown') as added_by_name
+       FROM party_songs ps
+       LEFT JOIN users u ON ps.added_by_user_id = u.id
+       WHERE ps.id = $1`,
+      [result.rows[0].id]
+    );
+
+    console.log('[Party] Song added, broadcasting to party', partyId, ':', songWithName.rows[0].title);
+
+    // Broadcast update to all connected clients with the complete song data
+    broadcastPartyUpdate(parseInt(partyId), {
+      type: 'song_added',
+      song: songWithName.rows[0]
+    });
+
+    res.json(songWithName.rows[0]);
   } catch (error) {
     console.error('Add party song error:', error);
     res.status(500).json({ error: 'Failed to add song' });
@@ -265,10 +284,181 @@ router.patch('/:partyId/songs/:songId/played', isAuthenticated, async (req: Requ
       [songId, partyId]
     );
 
+    // Broadcast update to all connected clients
+    broadcastPartyUpdate(parseInt(partyId), {
+      type: 'song_played',
+      songId: parseInt(songId)
+    });
+
     res.json({ success: true });
   } catch (error) {
     console.error('Mark song played error:', error);
     res.status(500).json({ error: 'Failed to mark song as played' });
+  }
+});
+
+// Reorder song (move up/down in queue)
+router.patch('/:partyId/songs/:songId/reorder', isAuthenticated, async (req: Request, res: Response) => {
+  try {
+    const { partyId, songId } = req.params;
+    const { direction } = req.body; // 'up' or 'down'
+    const userId = (req.user as any).id;
+
+    // Check if user is the host
+    const partyCheck = await pool.query(
+      'SELECT host_user_id FROM parties WHERE id = $1',
+      [partyId]
+    );
+
+    if (partyCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Party not found' });
+    }
+
+    if (partyCheck.rows[0].host_user_id !== userId) {
+      return res.status(403).json({ error: 'Only host can reorder songs' });
+    }
+
+    // Get all unplayed songs ordered by added_at
+    const songsResult = await pool.query(
+      `SELECT id, added_at FROM party_songs 
+       WHERE party_id = $1 AND played = false 
+       ORDER BY added_at ASC`,
+      [partyId]
+    );
+
+    const songs = songsResult.rows;
+    const currentIndex = songs.findIndex(s => s.id === parseInt(songId));
+
+    if (currentIndex === -1) {
+      return res.status(404).json({ error: 'Song not found or already played' });
+    }
+
+    // Calculate new index
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+
+    if (newIndex < 0 || newIndex >= songs.length) {
+      return res.status(400).json({ error: 'Cannot move song in that direction' });
+    }
+
+    // Swap the added_at timestamps to reorder
+    const currentSong = songs[currentIndex];
+    const targetSong = songs[newIndex];
+
+    await pool.query('BEGIN');
+    
+    try {
+      // Swap timestamps
+      await pool.query(
+        'UPDATE party_songs SET added_at = $1 WHERE id = $2',
+        [targetSong.added_at, currentSong.id]
+      );
+      
+      await pool.query(
+        'UPDATE party_songs SET added_at = $1 WHERE id = $2',
+        [currentSong.added_at, targetSong.id]
+      );
+
+      await pool.query('COMMIT');
+
+      // Broadcast full song list update
+      const updatedSongs = await pool.query(
+        `SELECT ps.*, 
+         COALESCE(u.name, ps.added_by_guest_name, 'Unknown') as added_by_name
+         FROM party_songs ps
+         LEFT JOIN users u ON ps.added_by_user_id = u.id
+         WHERE ps.party_id = $1
+         ORDER BY ps.played ASC, ps.added_at ASC`,
+        [partyId]
+      );
+
+      broadcastPartyUpdate(parseInt(partyId), {
+        type: 'songs',
+        songs: updatedSongs.rows
+      });
+
+      res.json({ success: true });
+    } catch (err) {
+      await pool.query('ROLLBACK');
+      throw err;
+    }
+  } catch (error) {
+    console.error('Reorder song error:', error);
+    res.status(500).json({ error: 'Failed to reorder song' });
+  }
+});
+
+// Delete song from party
+router.delete('/:partyId/songs/:songId', async (req: Request, res: Response) => {
+  try {
+    const { partyId, songId } = req.params;
+    const { guest_name } = req.body;
+    const userId = req.isAuthenticated() ? (req.user as any).id : null;
+
+    // Get the song details first
+    const songResult = await pool.query(
+      'SELECT * FROM party_songs WHERE id = $1 AND party_id = $2',
+      [songId, partyId]
+    );
+
+    if (songResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Song not found' });
+    }
+
+    const song = songResult.rows[0];
+
+    // Check permissions: must be host OR the user/guest who added the song
+    const partyCheck = await pool.query(
+      'SELECT host_user_id FROM parties WHERE id = $1',
+      [partyId]
+    );
+
+    if (partyCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Party not found' });
+    }
+
+    const isHost = userId && partyCheck.rows[0].host_user_id === userId;
+    const isOwner = (userId && song.added_by_user_id === userId) || 
+                    (guest_name && song.added_by_guest_name === guest_name);
+
+    if (!isHost && !isOwner) {
+      return res.status(403).json({ error: 'You can only delete your own songs' });
+    }
+
+    // Don't allow deletion of currently played song
+    if (song.played) {
+      return res.status(400).json({ error: 'Cannot delete already played songs' });
+    }
+
+    // Delete the song
+    await pool.query(
+      'DELETE FROM party_songs WHERE id = $1 AND party_id = $2',
+      [songId, partyId]
+    );
+
+    console.log('[Party] Song deleted, broadcasting update to all clients');
+
+    // Broadcast update to all connected clients
+    const updatedSongs = await pool.query(
+      `SELECT ps.*, 
+       COALESCE(u.name, ps.added_by_guest_name, 'Unknown') as added_by_name
+       FROM party_songs ps
+       LEFT JOIN users u ON ps.added_by_user_id = u.id
+       WHERE ps.party_id = $1
+       ORDER BY ps.played ASC, ps.added_at ASC`,
+      [partyId]
+    );
+
+    console.log('[Party] Broadcasting', updatedSongs.rows.length, 'songs to party', partyId);
+
+    broadcastPartyUpdate(parseInt(partyId), {
+      type: 'songs',
+      songs: updatedSongs.rows
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Delete song error:', error);
+    res.status(500).json({ error: 'Failed to delete song' });
   }
 });
 
