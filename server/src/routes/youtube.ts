@@ -55,7 +55,11 @@ router.get('/search', youtubeLimiter, async (req: Request, res: Response) => {
   try {
     // Check if API key is configured
     if (!YOUTUBE_API_KEY) {
-      return res.status(500).json({ error: 'YouTube API not configured on server' });
+      console.error('YOUTUBE_API_KEY environment variable is not set!');
+      return res.status(500).json({ 
+        error: 'YouTube API not configured on server',
+        details: 'YOUTUBE_API_KEY environment variable is missing'
+      });
     }
     
     const query = req.query.q as string;
@@ -127,7 +131,11 @@ router.get('/search', youtubeLimiter, async (req: Request, res: Response) => {
     
   } catch (error) {
     console.error('YouTube proxy error:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    res.status(500).json({ 
+      error: 'Internal server error',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
   }
 });
 

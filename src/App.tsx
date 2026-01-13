@@ -204,13 +204,26 @@ function App() {
         <div className="px-4 py-3 flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">
-              Youtube Karaoke Player 
-              <span className="ml-2 text-xs font-normal bg-yellow-600 text-yellow-100 px-2 py-1 rounded">BETA</span>
+              Youtube Karaoke Player
             </h1>
             <p className="text-xs text-gray-400 mt-1">Build #{import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || import.meta.env.VITE_BUILD_ID || 'dev'}</p>
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Toggle Sidebar Button */}
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                {showSidebar ? (
+                  <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                ) : (
+                  <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                )}
+              </svg>
+              <span className="hidden sm:inline">{showSidebar ? 'Hide Sidebar' : 'Show Sidebar'}</span>
+            </button>
             {isAuthenticated ? (
               <div className="relative">
                 <button
@@ -351,20 +364,6 @@ function App() {
 
           {/* Right Main Content - Video Player */}
           <div className={`${showSidebar ? 'lg:col-span-8 xl:col-span-9' : 'lg:col-span-12'} h-full overflow-hidden flex flex-col`}>
-            {/* Toggle Sidebar Button */}
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              className="mb-2 self-start bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2"
-            >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                {showSidebar ? (
-                  <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h6a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                ) : (
-                  <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 10a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM3 15a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                )}
-              </svg>
-              {showSidebar ? 'Hide Sidebar' : 'Show Sidebar'}
-            </button>
             {isPartyPlaylist && isHost && currentSongIndex >= 0 && (
               <div className="bg-[#10b981] border border-emerald-400 rounded-lg p-3 mb-2">
                 <div className="flex items-center justify-between mb-2">
