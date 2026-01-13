@@ -115,6 +115,28 @@ export const partyAPI = {
     if (!response.ok) throw new Error('Failed to mark song as played');
   },
 
+  // Reorder song in queue
+  reorderSong: async (partyId: number, songId: number, direction: 'up' | 'down'): Promise<void> => {
+    const response = await fetch(`${API_URL}/api/party/${partyId}/songs/${songId}/reorder`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ direction }),
+    });
+    if (!response.ok) throw new Error('Failed to reorder song');
+  },
+
+  // Delete song from party
+  deleteSong: async (partyId: number, songId: number, guestName?: string): Promise<void> => {
+    const response = await fetch(`${API_URL}/api/party/${partyId}/songs/${songId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ guest_name: guestName }),
+    });
+    if (!response.ok) throw new Error('Failed to delete song');
+  },
+
   // End party
   endParty: async (partyId: number): Promise<void> => {
     const response = await fetch(`${API_URL}/api/party/${partyId}/end`, {

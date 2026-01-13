@@ -1,28 +1,28 @@
 import { useState, useEffect } from 'react';
-import { partyAPI, Party, PartySong, PartyMember } from '../api/party';
+import { partyAPI, Party, PartyMember } from '../api/party';
 import { PlaylistItem } from '../App';
 import SearchBar from './SearchBar';
 import { useAuth } from '../contexts/AuthContext';
+import { useParty } from '../contexts/PartyContext';
 
 interface PartyModeProps {
-  onClose: (party?: Party | null, songs?: PartySong[], guestName?: string | null) => void;
+  onClose: () => void;
   onVideoSelect: (videoId: string) => void;
   initialParty?: Party | null;
-  onPartySongsUpdate?: (songs: PartySong[]) => void;
 }
 
-const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }: PartyModeProps) => {
+const PartyMode = ({ onClose, onVideoSelect, initialParty }: PartyModeProps) => {
   const { user, isAuthenticated } = useAuth();
+  const { activeParty, unplayedSongs, isHost, joinParty, createParty, addSong, leaveParty, endParty, refreshSongs, markSongPlayed } = useParty();
+  
+  // Determine initial view: if there's an active party or initialParty, show party view
   const [view, setView] = useState<'list' | 'create' | 'join' | 'party'>(
-    initialParty ? 'party' : (!isAuthenticated ? 'join' : 'list')
+    (initialParty || activeParty) ? 'party' : (!isAuthenticated ? 'join' : 'list')
   );
   const [parties, setParties] = useState<Party[]>([]);
-  const [currentParty, setCurrentParty] = useState<Party | null>(initialParty || null);
-  const [partySongs, setPartySongs] = useState<PartySong[]>([]);
   const [partyMembers, setPartyMembers] = useState<PartyMember[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const [partyEnded, setPartyEnded] = useState(false);
   
   // Create party form
   const [partyName, setPartyName] = useState('');
@@ -31,14 +31,11 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
   // Join party form
   const [joinCode, setJoinCode] = useState('');
   const [joinPassword, setJoinPassword] = useState('');
-  const [guestName, setGuestName] = useState('');
+  const [guestNameInput, setGuestNameInput] = useState('');
   const [error, setError] = useState('');
   
   // QR code URL
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  
-  // Guest session (stored in state after joining)
-  const [currentGuestName, setCurrentGuestName] = useState<string | null>(null);
 
   useEffect(() => {
     loadParties();
@@ -54,33 +51,18 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
     }
   }, []);
 
+  // Auto-switch to party view when activeParty is available
   useEffect(() => {
-    if (currentParty && view === 'party') {
-      loadPartyDetails();
-      const interval = setInterval(loadPartyDetails, 5000); // Refresh every 5 seconds
-      
-      // Handle page visibility changes (important for mobile Safari)
-      const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') {
-          console.log('[PartyMode] Page became visible, refreshing party details')
-          loadPartyDetails()
-        }
-      }
-      
-      document.addEventListener('visibilitychange', handleVisibilityChange)
-      
-      return () => {
-        clearInterval(interval)
-        document.removeEventListener('visibilitychange', handleVisibilityChange)
-      }
+    if (activeParty && view === 'list') {
+      setView('party');
     }
-  }, [currentParty, currentGuestName, view]); // Include currentGuestName to avoid stale closures
+  }, [activeParty]);
 
   useEffect(() => {
-    if (currentParty && view === 'party') {
+    if (activeParty && view === 'party') {
       generateQRCode();
     }
-  }, [currentParty, view]);
+  }, [activeParty, view]);
 
   const loadParties = async () => {
     try {
@@ -94,63 +76,29 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
   // Check if user has a hosted party
   const hasHostedParty = parties.some(p => p.host_user_id === user?.id);
 
-  const loadPartyDetails = async () => {
-    if (!currentParty) return;
-    
-    console.log('[PartyMode] Loading party details for party:', currentParty.id);
+  const loadMembers = async () => {
+    if (!activeParty) return;
     
     try {
-      // Only check party status if user is authenticated (host or member)
-      // Guests don't have access to getParty endpoint
-      if (isAuthenticated) {
-        const partyDetails = await partyAPI.getParty(currentParty.id);
-        
-        if (!partyDetails.is_active) {
-          // Party has ended - show message and close after 3 seconds
-          setPartyEnded(true);
-          setTimeout(() => {
-            setCurrentParty(null);
-            setView('list');
-            onClose();
-          }, 3000);
-          return;
-        }
-      }
-      
-      const [songs, members] = await Promise.all([
-        partyAPI.getPartySongs(currentParty.id),
-        partyAPI.getPartyMembers(currentParty.id)
-      ]);
-      console.log('[PartyMode] Loaded', songs.length, 'songs');
-      // Force a new array reference to trigger React re-render
-      setPartySongs([...songs]);
+      const members = await partyAPI.getPartyMembers(activeParty.id);
       setPartyMembers(members);
-      // Notify parent component of song updates (for guests viewing on main screen)
-      if (onPartySongsUpdate) {
-        console.log('[PartyMode] Calling onPartySongsUpdate with', songs.length, 'songs');
-        onPartySongsUpdate(songs);
-      } else {
-        console.log('[PartyMode] onPartySongsUpdate callback not provided');
-      }
     } catch (err) {
-      console.error('Failed to load party details:', err);
-      // If party not found (404), it might have been ended
-      if ((err as any).message?.includes('404') || (err as any).message?.includes('not found')) {
-        setPartyEnded(true);
-        setTimeout(() => {
-          setCurrentParty(null);
-          setView('list');
-          onClose();
-        }, 3000);
-      }
+      console.error('Failed to load party members:', err);
     }
   };
 
+  // Load members when activeParty changes
+  useEffect(() => {
+    if (activeParty) {
+      loadMembers();
+    }
+  }, [activeParty]);
+
   const generateQRCode = async () => {
-    if (!currentParty) return;
+    if (!activeParty) return;
     
     // Simple data URL encoding for QR code (you can enhance this)
-    const joinUrl = `${window.location.origin}?party=${currentParty.code}`;
+    const joinUrl = `${window.location.origin}?party=${activeParty.code}`;
     const qrData = encodeURIComponent(joinUrl);
     setQrCodeUrl(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${qrData}`);
   };
@@ -161,8 +109,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
     setLoading(true);
 
     try {
-      const party = await partyAPI.createParty(partyName, partyPassword);
-      setCurrentParty(party);
+      await createParty(partyName, partyPassword);
       setView('party');
       loadParties();
       // Close the modal after successful creation
@@ -182,25 +129,10 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
     setLoading(true);
 
     try {
-      const party = await partyAPI.joinParty(joinCode, joinPassword, guestName || undefined);
-      setCurrentParty(party);
-      if (guestName) {
-        setCurrentGuestName(guestName);
-      }
+      await joinParty(joinCode, joinPassword, guestNameInput || undefined);
       setView('party');
       loadParties();
-      // Load party details immediately for guests using the party object directly
-      const [songs, members] = await Promise.all([
-        partyAPI.getPartySongs(party.id),
-        partyAPI.getPartyMembers(party.id)
-      ]);
-      // Force a new array reference to trigger React re-render
-      setPartySongs([...songs]);
-      setPartyMembers(members);
-      // Notify parent component of initial song load
-      if (onPartySongsUpdate) {
-        onPartySongsUpdate(songs);
-      }
+      await loadMembers(); // Load members after joining
     } catch (err: any) {
       setError(err.message || 'Failed to join party');
     } finally {
@@ -209,11 +141,10 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
   };
 
   const handleEndParty = async () => {
-    if (!currentParty || !confirm('Are you sure you want to end this party?')) return;
+    if (!activeParty || !confirm('Are you sure you want to end this party?')) return;
 
     try {
-      await partyAPI.endParty(currentParty.id);
-      setCurrentParty(null);
+      await endParty();
       setView('list');
       loadParties();
     } catch (err: any) {
@@ -222,28 +153,21 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
   };
 
   const handleClose = () => {
-    // If user is a guest in a party, pass the party data back to App
-    if (currentParty && currentGuestName) {
-      onClose(currentParty, partySongs, currentGuestName);
-    } else {
-      onClose();
-    }
+    onClose();
   };
 
   const handleLeaveParty = () => {
     if (!confirm('Are you sure you want to leave this party?')) return;
-    setCurrentParty(null);
-    setCurrentGuestName(null);
+    leaveParty();
     setView('list');
-    onClose(); // Call onClose without party data to clear guest state
+    onClose();
   };
 
   const handleMarkPlayed = async (songId: number) => {
-    if (!currentParty) return;
+    if (!activeParty) return;
 
     try {
-      await partyAPI.markSongPlayed(currentParty.id, songId);
-      loadPartyDetails();
+      await markSongPlayed(songId);
     } catch (err: any) {
       setError(err.message || 'Failed to mark song as played');
     }
@@ -254,21 +178,17 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
   };
 
   const handleAddSongToParty = async (item: PlaylistItem) => {
-    if (!currentParty) return;
+    if (!activeParty) return;
 
     try {
       console.log('[PartyMode] Adding song to party:', item.title);
-      await partyAPI.addSongToParty(currentParty.id, {
+      await addSong({
         video_id: item.id,
         title: item.title,
         thumbnail: item.thumbnail,
         channel_title: item.channelTitle,
-        guest_name: currentGuestName || undefined,
       });
-      console.log('[PartyMode] Song added successfully, reloading party details');
-      // Reload party details to update the queue
-      await loadPartyDetails();
-      console.log('[PartyMode] Party details reloaded');
+      console.log('[PartyMode] Song added successfully');
       setShowSearch(false);
     } catch (err: any) {
       console.error('[PartyMode] Failed to add song:', err);
@@ -328,7 +248,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
                 {parties.map((party) => (
                   <button
                     key={party.id}
-                    onClick={() => { setCurrentParty(party); setView('party'); }}
+                    onClick={() => { setView('party'); }}
                     className="w-full bg-gray-700 hover:bg-gray-600 p-4 rounded-lg text-left transition-colors"
                   >
                     <div className="flex justify-between items-start">
@@ -408,8 +328,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
                 <label className="block text-gray-300 mb-2">Your Name</label>
                 <input
                   type="text"
-                  value={guestName}
-                  onChange={(e) => setGuestName(e.target.value)}
+                  value={guestNameInput}
+                  onChange={(e) => setGuestNameInput(e.target.value)}
                   className="w-full bg-gray-700 text-white px-4 py-2 rounded border border-gray-600 focus:border-blue-500 outline-none"
                   placeholder="Enter your name"
                   required
@@ -451,20 +371,10 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
         )}
 
         {/* Party View */}
-        {view === 'party' && currentParty && (
+        {view === 'party' && activeParty && (
           <div className="p-6">
-            {/* Party Ended Overlay */}
-            {partyEnded && (
-              <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-                <div className="bg-gray-800 border-2 border-red-500 rounded-lg p-8 text-center">
-                  <h2 className="text-4xl font-bold text-red-500 mb-4">Party Ended</h2>
-                  <p className="text-gray-300">Redirecting to home page...</p>
-                </div>
-              </div>
-            )}
-            
             <button
-              onClick={() => { setCurrentParty(null); setView('list'); }}
+              onClick={() => { setView('list'); }}
               className="text-gray-400 hover:text-white mb-4"
             >
               ← Back
@@ -475,8 +385,8 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
               <div className="flex justify-between items-start">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-2xl font-bold text-white">{currentParty.name}</h3>
-                    {currentParty.host_user_id === user?.id ? (
+                    <h3 className="text-2xl font-bold text-white">{activeParty.name}</h3>
+                    {isHost ? (
                       <span className="bg-yellow-600 text-yellow-100 text-xs font-bold px-2 py-1 rounded-full">
                         HOST WINDOW
                       </span>
@@ -487,14 +397,14 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
                     )}
                   </div>
                   <div className="text-gray-300 mb-2">
-                    Party Code: <span className="font-mono bg-gray-900 px-3 py-1 rounded text-lg">{currentParty.code}</span>
+                    Party Code: <span className="font-mono bg-gray-900 px-3 py-1 rounded text-lg">{activeParty.code}</span>
                   </div>
                   <div className="text-gray-400 text-sm">
-                    {partySongs.filter(s => !s.played).length} song{partySongs.filter(s => !s.played).length !== 1 ? 's' : ''} in queue
+                    {unplayedSongs.length} song{unplayedSongs.length !== 1 ? 's' : ''} in queue
                   </div>
                 </div>
                 {/* Only show QR code and members to host */}
-                {currentParty.host_user_id === user?.id && qrCodeUrl && (
+                {isHost && qrCodeUrl && (
                   <div className="ml-4">
                     <img src={qrCodeUrl} alt="Party QR Code" className="w-32 h-32 bg-white p-2 rounded" />
                     <div className="text-xs text-gray-400 text-center mt-1">Scan to join</div>
@@ -504,12 +414,12 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
             </div>
 
             {/* Members - Host only */}
-            {currentParty.host_user_id === user?.id && (
+            {isHost && (
               <div className="mb-6">
                 <h4 className="text-lg font-bold text-white mb-3">Members ({partyMembers.length})</h4>
                 <div className="flex flex-wrap gap-2">
-                  {partyMembers.map((member) => (
-                    <div key={member.id} className="flex items-center gap-2 bg-gray-700 rounded-full px-3 py-1">
+                  {partyMembers.map((member, index) => (
+                    <div key={member.id || `member-${index}`} className="flex items-center gap-2 bg-gray-700 rounded-full px-3 py-1">
                       <img src={member.profile_picture} alt={member.name} className="w-6 h-6 rounded-full" />
                       <span className="text-white text-sm">{member.name}</span>
                     </div>
@@ -549,7 +459,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
                 <button
                   onClick={() => {
                     console.log('[PartyMode] Manual refresh triggered')
-                    loadPartyDetails()
+                    refreshSongs()
                   }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-sm flex items-center gap-1"
                 >
@@ -559,11 +469,11 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
                   Refresh
                 </button>
               </div>
-              {partySongs.filter(song => !song.played).length === 0 ? (
+              {unplayedSongs.length === 0 ? (
                 <p className="text-gray-400 text-center py-8">No songs added yet. Click "Add Song to Queue" to search!</p>
               ) : (
                 <div className="space-y-2">
-                  {partySongs.filter(song => !song.played).map((song) => (
+                  {unplayedSongs.map((song) => (
                     <div
                       key={song.id}
                       className="p-3 rounded-lg flex items-center gap-3 bg-gray-700"
@@ -575,7 +485,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
                         <div className="text-gray-500 text-xs">Added by {song.added_by_name}</div>
                       </div>
                       {/* Only show Play/Done buttons to host */}
-                      {currentParty.host_user_id === user?.id && (
+                      {isHost && (
                         <div className="flex gap-2">
                           <button
                             onClick={() => handlePlaySong(song.video_id)}
@@ -598,7 +508,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
             </div>
 
             {/* End Party Button (Host only) */}
-            {currentParty.host_user_id === user?.id && (
+            {isHost && (
               <button
                 onClick={handleEndParty}
                 className="w-full mt-6 bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded font-semibold"
@@ -608,7 +518,7 @@ const PartyMode = ({ onClose, onVideoSelect, initialParty, onPartySongsUpdate }:
             )}
             
             {/* Leave Party Button (Guest only) */}
-            {currentParty.host_user_id !== user?.id && (
+            {!isHost && (
               <button
                 onClick={handleLeaveParty}
                 className="w-full mt-6 bg-gray-600 hover:bg-gray-500 text-white py-2 px-4 rounded font-semibold"

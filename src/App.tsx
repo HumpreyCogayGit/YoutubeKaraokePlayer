@@ -6,8 +6,10 @@ import UserProfile from './components/UserProfile'
 import SavedPlaylists from './components/SavedPlaylists'
 import PartyMode from './components/PartyMode'
 import HostPartyList from './components/HostPartyList'
+import YouTubeEngagement from './components/YouTubeEngagement'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useAuth } from './contexts/AuthContext'
-import { Party, partyAPI, PartySong } from './api/party'
+import { useParty } from './contexts/PartyContext'
 
 export interface PlaylistItem {
   id: string
@@ -19,48 +21,17 @@ export interface PlaylistItem {
 
 function App() {
   const { user, isAuthenticated, login, logout } = useAuth()
+  const { activeParty, unplayedSongs, isHost, isGuest, guestName, currentSongIndex, setCurrentSongIndex, markSongPlayed, addSong, refreshSongs, reorderSong, deleteSong } = useParty()
+  
   const [selectedVideoId, setSelectedVideoId] = useState<string>('')
   const [playlist, setPlaylist] = useState<PlaylistItem[]>([])
-  const [currentIndex, setCurrentIndex] = useState<number>(-1)
+  const [currentIndex, setCurrentIndex] = useState(-1)
+  const [selectedParty, setSelectedParty] = useState<any>(null)
   const [showUserMenu, setShowUserMenu] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showSavedPlaylists, setShowSavedPlaylists] = useState(false)
   const [showPartyMode, setShowPartyMode] = useState(false)
-  const [selectedParty, setSelectedParty] = useState<Party | null>(null)
-  const [hostParty, setHostParty] = useState<Party | null>(null)
-  const [partySongs, setPartySongs] = useState<PartySong[]>([])
   const [showSidebar, setShowSidebar] = useState(true)
-  const [guestParty, setGuestParty] = useState<Party | null>(null)
-  const [guestPartySongs, setGuestPartySongs] = useState<PartySong[]>([])
-  const [guestName, setGuestName] = useState<string | null>(null)
-
-  // Load persisted guest party state on mount
-  useEffect(() => {
-    const savedGuestParty = localStorage.getItem('guestParty')
-    const savedGuestName = localStorage.getItem('guestName')
-    if (savedGuestParty && savedGuestName) {
-      try {
-        const party = JSON.parse(savedGuestParty)
-        setGuestParty(party)
-        setGuestName(savedGuestName)
-      } catch (err) {
-        console.error('Failed to restore guest party:', err)
-        localStorage.removeItem('guestParty')
-        localStorage.removeItem('guestName')
-      }
-    }
-  }, [])
-
-  // Persist guest party state to localStorage
-  useEffect(() => {
-    if (guestParty && guestName) {
-      localStorage.setItem('guestParty', JSON.stringify(guestParty))
-      localStorage.setItem('guestName', guestName)
-    } else {
-      localStorage.removeItem('guestParty')
-      localStorage.removeItem('guestName')
-    }
-  }, [guestParty, guestName])
 
   // Check for QR code scan on mount
   useEffect(() => {
@@ -86,50 +57,41 @@ function App() {
     }
   }
 
-  const playFromPlaylist = (index: number) => {
-    setCurrentIndex(index)
-    setSelectedVideoId(playlist[index].id)
-  }
-
   const playNext = async () => {
+    const isPartyPlaylist = !!activeParty
+    
     // Mark current song as played for party playlists
-    if (isPartyPlaylist && hostParty && currentIndex >= 0) {
-      const currentSong = partySongs.find(song => !song.played && song.video_id === displayPlaylist[currentIndex]?.id)
-      if (currentSong) {
-        try {
-          console.log('[App] Marking song as played:', currentSong.title)
-          await partyAPI.markSongPlayed(hostParty.id, currentSong.id)
-          // Reload party data to update the queue with new array reference
-          const songs = await partyAPI.getPartySongs(hostParty.id)
-          console.log('[App] Reloaded party songs, total:', songs.length, 'unplayed:', songs.filter(s => !s.played).length)
-          setPartySongs([...songs]) // Force new array reference
-          
-          // After marking as played, the filtered array shifts
-          // The next song is now at index 0
-          const unplayedSongs = songs.filter(s => !s.played)
-          if (unplayedSongs.length > 0) {
-            setCurrentIndex(0)
-            setSelectedVideoId(unplayedSongs[0].video_id)
-          } else {
-            // No more songs, reset
-            setCurrentIndex(-1)
-            setSelectedVideoId('')
-          }
-          return // Exit early since we already set the next song
-        } catch (err) {
-          console.error('Failed to mark song as played:', err)
+    if (isPartyPlaylist && isHost && currentSongIndex >= 0 && unplayedSongs[currentSongIndex]) {
+      const currentSong = unplayedSongs[currentSongIndex]
+      try {
+        const nextSong = await markSongPlayed(currentSong.id)
+        // markSongPlayed returns the next song to play
+        if (nextSong) {
+          setSelectedVideoId(nextSong.video_id)
+        } else {
+          setSelectedVideoId('')
         }
+        return
+      } catch (err) {
+        console.error('Failed to mark song as played:', err)
       }
     }
 
     // For non-party playlists, just move to next index
-    if (currentIndex < displayPlaylist.length - 1) {
+    const currentIndex = isPartyPlaylist ? currentSongIndex : playlist.findIndex(p => p.id === selectedVideoId)
+    const displayList = isPartyPlaylist ? partyPlaylist : playlist
+    
+    if (currentIndex < displayList.length - 1) {
       const nextIndex = currentIndex + 1
-      setCurrentIndex(nextIndex)
-      setSelectedVideoId(displayPlaylist[nextIndex].id)
+      if (isPartyPlaylist) {
+        setCurrentSongIndex(nextIndex)
+      }
+      setSelectedVideoId(displayList[nextIndex].id)
     } else {
       // No more songs, reset
-      setCurrentIndex(-1)
+      if (isPartyPlaylist) {
+        setCurrentSongIndex(0)
+      }
       setSelectedVideoId('')
     }
   }
@@ -139,140 +101,37 @@ function App() {
     setCurrentIndex(-1)
   }
 
-  // Load host party and its songs
-  const loadHostParty = async () => {
-    if (!isAuthenticated) {
-      setHostParty(null)
-      setPartySongs([])
-      return
-    }
-
-    try {
-      const parties = await partyAPI.getMyParties()
-      // Find the party where current user is the host
-      const myHostParty = parties.find(p => p.host_user_id === user?.id)
-      
-      // Check if party is still active
-      if (myHostParty && !myHostParty.is_active) {
-        // Party has ended - clear it
-        setHostParty(null)
-        setPartySongs([])
-        return
-      }
-      
-      setHostParty(myHostParty || null)
-      
-      if (myHostParty) {
-        const songs = await partyAPI.getPartySongs(myHostParty.id)
-        setPartySongs(songs)
-      } else {
-        setPartySongs([])
-      }
-    } catch (err) {
-      console.error('Failed to load host party:', err)
-    }
-  }
-
-  useEffect(() => {
-    loadHostParty()
-
-    loadHostParty()
-    // Refresh every 5 seconds
-    const interval = setInterval(loadHostParty, 5000)
-    return () => clearInterval(interval)
-  }, [isAuthenticated, user])
-
-  // Load guest party details periodically
-  const loadGuestParty = async () => {
-    if (!guestParty) return
-
-    try {
-      // Check if party is still active
-      const partyDetails = await partyAPI.getParty(guestParty.id)
-      
-      if (!partyDetails.is_active) {
-        // Party has ended - clear guest state and localStorage
-        setGuestParty(null)
-        setGuestPartySongs([])
-        setGuestName(null)
-        localStorage.removeItem('guestParty')
-        localStorage.removeItem('guestName')
-        return
-      }
-      
-      const songs = await partyAPI.getPartySongs(guestParty.id)
-      setGuestPartySongs(songs)
-    } catch (err) {
-      console.error('Failed to load guest party:', err)
-      // If party not found, clear state and localStorage
-      if ((err as any).message?.includes('404') || (err as any).message?.includes('not found')) {
-        setGuestParty(null)
-        setGuestPartySongs([])
-        setGuestName(null)
-        localStorage.removeItem('guestParty')
-        localStorage.removeItem('guestName')
-      }
-    }
-  }
-
-  useEffect(() => {
-    if (!guestParty) return
-
-    loadGuestParty()
-    // Refresh every 5 seconds
-    const interval = setInterval(loadGuestParty, 5000)
-    
-    // Handle page visibility changes (important for mobile Safari)
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        console.log('[App] Page became visible, refreshing guest party')
-        loadGuestParty()
-      }
-    }
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    
-    return () => {
-      clearInterval(interval)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [guestParty])
-
   // Convert party songs to playlist items (exclude played songs)
-  const allPartySongs = hostParty ? partySongs : (guestParty ? guestPartySongs : [])
-  const partyPlaylist: PlaylistItem[] = allPartySongs
-    .filter(song => !song.played)
-    .map(song => ({
-      id: song.video_id,
-      title: song.title,
-      thumbnail: song.thumbnail,
-      channelTitle: song.channel_title,
-      addedBy: song.added_by_name
-    }))
+  const partyPlaylist: PlaylistItem[] = unplayedSongs.map(song => ({
+    id: song.video_id,
+    title: song.title,
+    thumbnail: song.thumbnail,
+    channelTitle: song.channel_title,
+    addedBy: song.added_by_name
+  }))
 
   // Determine which playlist to show
-  const displayPlaylist = hostParty ? partyPlaylist : (guestParty ? partyPlaylist : playlist)
-  const isPartyPlaylist = !!hostParty || !!guestParty
-  const isGuest = !!guestParty && !!guestName
+  const displayPlaylist = activeParty ? partyPlaylist : playlist
+  const isPartyPlaylist = !!activeParty
 
   const handlePlayFromPlaylist = (index: number) => {
     if (isPartyPlaylist) {
-      setCurrentIndex(index)
+      setCurrentSongIndex(index)
       setSelectedVideoId(displayPlaylist[index].id)
     } else {
-      playFromPlaylist(index)
+      setSelectedVideoId(playlist[index].id)
     }
   }
 
   const handleRemoveFromPlaylist = async (index: number) => {
     if (isPartyPlaylist) {
-      // For party playlist, mark as played instead of removing
-      const song = partySongs[index]
-      if (song && hostParty) {
+      // For party playlist, delete the song (guests can delete their own, hosts can delete any)
+      const song = unplayedSongs[index]
+      if (song) {
         try {
-          await partyAPI.markSongPlayed(hostParty.id, song.id)
+          await deleteSong(song.id)
         } catch (err) {
-          console.error('Failed to mark song as played:', err)
+          console.error('Failed to delete song:', err)
         }
       }
     } else {
@@ -287,10 +146,10 @@ function App() {
   }
 
   const handleAddToPlaylist = async (item: PlaylistItem) => {
-    if (hostParty) {
-      // Add to party playlist
+    if (activeParty) {
+      // Add to party playlist using PartyContext
       try {
-        await partyAPI.addSongToParty(hostParty.id, {
+        await addSong({
           video_id: item.id,
           title: item.title,
           thumbnail: item.thumbnail,
@@ -306,19 +165,34 @@ function App() {
   }
 
   const handleSkipCurrentSong = async () => {
-    if (!isPartyPlaylist || !hostParty) return
+    if (!isPartyPlaylist || !isHost) return
     
     // Mark current song as played
-    const currentSong = partySongs[currentIndex]
-    if (currentSong && currentIndex < displayPlaylist.length - 1) {
+    const currentSong = unplayedSongs[currentSongIndex]
+    if (currentSong) {
       try {
-        await partyAPI.markSongPlayed(hostParty.id, currentSong.id)
-        // Move to next song immediately
-        const nextIndex = currentIndex + 1
-        setCurrentIndex(nextIndex)
-        setSelectedVideoId(displayPlaylist[nextIndex].id)
+        const nextSong = await markSongPlayed(currentSong.id)
+        // markSongPlayed returns the next song and resets currentSongIndex to 0
+        if (nextSong) {
+          setSelectedVideoId(nextSong.video_id)
+        } else {
+          setSelectedVideoId('')
+        }
       } catch (err) {
         console.error('Failed to skip song:', err)
+      }
+    }
+  }
+
+  const handleReorderSong = async (index: number, direction: 'up' | 'down') => {
+    if (!isPartyPlaylist || !isHost) return
+    
+    const song = unplayedSongs[index]
+    if (song) {
+      try {
+        await reorderSong(song.id, direction)
+      } catch (err) {
+        console.error('Failed to reorder song:', err)
       }
     }
   }
@@ -449,7 +323,7 @@ function App() {
                   <button
                     onClick={() => {
                       console.log('[App] Manual refresh triggered')
-                      loadGuestParty()
+                      refreshSongs()
                     }}
                     className="w-full mb-2 bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-4 rounded-lg font-semibold flex items-center justify-center gap-2"
                   >
@@ -461,12 +335,15 @@ function App() {
                 )}
                 <Playlist 
                   items={displayPlaylist}
-                  currentIndex={currentIndex}
+                  currentIndex={isPartyPlaylist ? currentSongIndex : currentIndex}
                   onPlay={handlePlayFromPlaylist}
                   onRemove={handleRemoveFromPlaylist}
                   onClear={handleClearPlaylist}
                   isPartyPlaylist={isPartyPlaylist}
-                  partyName={hostParty?.name || guestParty?.name}
+                  partyName={activeParty?.name}
+                  isHost={isHost}
+                  guestName={guestName}
+                  onReorder={isPartyPlaylist && isHost ? handleReorderSong : undefined}
                 />
               </div>
             </div>
@@ -488,32 +365,33 @@ function App() {
               </svg>
               {showSidebar ? 'Hide Sidebar' : 'Show Sidebar'}
             </button>
-            {isPartyPlaylist && currentIndex >= 0 && (
+            {isPartyPlaylist && isHost && currentSongIndex >= 0 && (
               <div className="bg-[#10b981] border border-emerald-400 rounded-lg p-3 mb-2">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2 overflow-hidden flex-1">
+                    <span className="bg-emerald-600 text-white text-xs px-2 py-1 rounded flex-shrink-0">CURRENT SONG</span>
                     <div className="overflow-hidden">
-                      <div className="text-white text-sm font-medium whitespace-nowrap animate-scroll">
-                        🎵 Now Playing: {displayPlaylist[currentIndex]?.title} • Added by: {displayPlaylist[currentIndex]?.addedBy || 'Unknown'}
+                      <div className="text-white text-sm truncate">
+                        {unplayedSongs[currentSongIndex]?.title} • Added by: {unplayedSongs[currentSongIndex]?.added_by_name || 'Unknown'}
                       </div>
                     </div>
                   </div>
                   <button
                     onClick={handleSkipCurrentSong}
-                    className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2 flex-shrink-0 ml-2"
+                    className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1 rounded-lg font-semibold transition-all flex items-center gap-2 flex-shrink-0 ml-2"
                   >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M4.555 5.168A1 1 0 003 6v8a1 1 0 001.555.832L10 11.202V14a1 1 0 001.555.832l6-4a1 1 0 000-1.664l-6-4A1 1 0 0010 6v2.798l-5.445-3.63z" />
                     </svg>
                     Skip Song
                   </button>
                 </div>
-                {currentIndex < displayPlaylist.length - 1 && (
+                {currentSongIndex < unplayedSongs.length - 1 && (
                   <div className="flex items-center gap-2 overflow-hidden border-t border-emerald-400 pt-2">
                     <span className="bg-emerald-600 text-white text-xs px-2 py-1 rounded flex-shrink-0">UP NEXT</span>
                     <div className="overflow-hidden">
-                      <div className="text-white text-sm whitespace-nowrap animate-scroll">
-                        ⏭️ {displayPlaylist[currentIndex + 1]?.title} • Added by: {displayPlaylist[currentIndex + 1]?.addedBy || 'Unknown'}
+                      <div className="text-white text-sm truncate">
+                        {unplayedSongs[currentSongIndex + 1]?.title} • Added by: {unplayedSongs[currentSongIndex + 1]?.added_by_name || 'Unknown'}
                       </div>
                     </div>
                   </div>
@@ -530,20 +408,75 @@ function App() {
             
             {/* Guest Message - Show when user is a guest */}
             {isGuest && (
-              <div className="flex-1 bg-gray-800 rounded-lg flex items-center justify-center">
-                <div className="text-center">
+              <div className="flex-1 bg-gray-800 rounded-lg flex items-center justify-center p-6">
+                <div className="text-center max-w-lg">
                   <h2 className="text-2xl font-bold text-emerald-500 mb-2">Guest Mode</h2>
-                  <p className="text-gray-400">You're viewing the party as: <span className="text-white">{guestName}</span></p>
-                  <p className="text-gray-500 text-sm mt-4">Only the host can play videos</p>
+                  <p className="text-gray-400 mb-6">You're viewing the party as: <span className="text-white font-semibold">{guestName}</span></p>
+                  
+                  {(() => {
+                    // Find the guest's next song in the queue
+                    const guestSongs = unplayedSongs.filter(song => song.added_by_name === guestName)
+                    const nextGuestSong = guestSongs[0]
+                    
+                    if (nextGuestSong) {
+                      const position = unplayedSongs.findIndex(song => song.id === nextGuestSong.id) + 1
+                      const songsUntil = position - 1
+                      
+                      return (
+                        <div className="bg-emerald-900/30 border-2 border-emerald-500 rounded-lg p-6 mb-4">
+                          <div className="text-emerald-400 text-sm font-semibold mb-2">YOUR NEXT SONG</div>
+                          <div className="text-white text-xl font-bold mb-3 truncate">{nextGuestSong.title}</div>
+                          <div className="flex items-center justify-center gap-4 text-center">
+                            <div className="bg-emerald-600 px-6 py-3 rounded-lg">
+                              <div className="text-3xl font-bold text-white">{position}</div>
+                              <div className="text-emerald-200 text-xs mt-1">Position in Queue</div>
+                            </div>
+                            {songsUntil > 0 && (
+                              <div className="bg-orange-600 px-6 py-3 rounded-lg">
+                                <div className="text-3xl font-bold text-white">{songsUntil}</div>
+                                <div className="text-orange-200 text-xs mt-1">Song{songsUntil !== 1 ? 's' : ''} Until Yours</div>
+                              </div>
+                            )}
+                          </div>
+                          {songsUntil === 0 && (
+                            <div className="mt-4 text-emerald-300 font-semibold animate-pulse">
+                              🎤 Your song is playing now!
+                            </div>
+                          )}
+                        </div>
+                      )
+                    } else {
+                      return (
+                        <div className="bg-gray-700 border border-gray-600 rounded-lg p-6 mb-4">
+                          <p className="text-gray-300">You haven't added any songs yet!</p>
+                          <p className="text-gray-500 text-sm mt-2">Search and add songs to see your queue position</p>
+                        </div>
+                      )
+                    }
+                  })()}
+                  
+                  <p className="text-gray-500 text-sm">Only the host can play videos</p>
                   <button
                     onClick={() => setShowPartyMode(true)}
                     className="mt-6 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg"
                   >
                     Open Party Details
                   </button>
+                  
+                  {/* YouTube Engagement Prompt - Shows for guests when a song is playing */}
+                  {currentSongIndex >= 0 && unplayedSongs[currentSongIndex] && (
+                    <div className="mt-6">
+                      <YouTubeEngagement 
+                        videoId={unplayedSongs[currentSongIndex].video_id}
+                        videoTitle={unplayedSongs[currentSongIndex].title}
+                        showInterval={90000}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
+            
           </div>
         </div>
       </div>
@@ -565,33 +498,16 @@ function App() {
       )}
       
       {showPartyMode && (
-        <PartyMode 
-          onClose={(party, songs, guestNameFromParty) => {
-            setShowPartyMode(false);
-            setSelectedParty(null);
-            
-            // If guest party data is passed, store it
-            if (party && guestNameFromParty) {
-              setGuestParty(party);
-              setGuestPartySongs(songs || []);
-              setGuestName(guestNameFromParty);
-            } else if (guestParty && !party) {
-              // If called without data and user was a guest, they're leaving
-              setGuestParty(null);
-              setGuestPartySongs([]);
-              setGuestName(null);
-            }
-            
-            loadHostParty(); // Refresh host party data after closing
-          }}
-          onVideoSelect={setSelectedVideoId}
-          initialParty={selectedParty}
-          onPartySongsUpdate={(songs) => {
-            // Update guest party songs in real-time when modal is open
-            console.log('[App] onPartySongsUpdate called with', songs.length, 'songs');
-            setGuestPartySongs(songs);
-          }}
-        />
+        <ErrorBoundary>
+          <PartyMode 
+            onClose={() => {
+              setShowPartyMode(false);
+              setSelectedParty(null);
+            }}
+            onVideoSelect={setSelectedVideoId}
+            initialParty={selectedParty}
+          />
+        </ErrorBoundary>
       )}
     </div>
   )

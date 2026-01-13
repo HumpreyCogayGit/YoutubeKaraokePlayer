@@ -59,9 +59,26 @@ app.use(initPartyStreamRoutes(pool)); // SSE routes
 
 // Health check
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'Karaoke API Server',
+    status: 'running',
+    endpoints: {
+      health: '/health',
+      auth: '/auth',
+      playlists: '/api/playlists',
+      party: '/api/party',
+      user: '/api/user'
+    }
+  });
+});
+
+const HOST = process.env.HOST || '0.0.0.0';
+app.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });

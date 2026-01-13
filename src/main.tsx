@@ -1,13 +1,36 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
+import { PartyProvider } from './contexts/PartyContext'
 import './index.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
+// Wrapper to pass user ID to PartyProvider
+const AppWithProviders = () => {
+  return (
     <AuthProvider>
-      <App />
+      <PartyProviderWrapper />
     </AuthProvider>
-  </React.StrictMode>,
-)
+  )
+}
+
+const PartyProviderWrapper = () => {
+  const { user } = useAuth()
+  return (
+    <PartyProvider userId={user?.id} userName={user?.name}>
+      <App />
+    </PartyProvider>
+  )
+}
+
+const rootElement = document.getElementById('root')!
+
+// Only create root once
+if (!rootElement.hasAttribute('data-reactroot')) {
+  rootElement.setAttribute('data-reactroot', 'true')
+  ReactDOM.createRoot(rootElement).render(
+    <React.StrictMode>
+      <AppWithProviders />
+    </React.StrictMode>,
+  )
+}

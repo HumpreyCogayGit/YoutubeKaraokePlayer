@@ -11,9 +11,12 @@ interface PlaylistProps {
   onClear: () => void
   isPartyPlaylist?: boolean
   partyName?: string
+  isHost?: boolean
+  guestName?: string | null
+  onReorder?: (index: number, direction: 'up' | 'down') => void
 }
 
-const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear, isPartyPlaylist = false, partyName }: PlaylistProps) => {
+const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear, isPartyPlaylist = false, partyName, isHost = false, guestName, onReorder }: PlaylistProps) => {
   const { isAuthenticated } = useAuth()
   const [saving, setSaving] = useState(false)
   const [playlistName, setPlaylistName] = useState('')
@@ -131,30 +134,68 @@ const Playlist = ({ items, currentIndex, onPlay, onRemove, onClear, isPartyPlayl
                   </p>
                 )}
               </div>
-              <div className="flex gap-1 flex-shrink-0">
-                <button
-                  onClick={() => onPlay(index)}
-                  className="p-1 bg-orange-500 text-white rounded hover:bg-orange-600 transition-all"
-                  title="Play"
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => onRemove(index)}
-                  className="p-1 bg-gray-600 text-white rounded hover:bg-gray-500 transition-all"
-                  title={isPartyPlaylist ? "Mark as played" : "Remove"}
-                >
-                  {isPartyPlaylist ? (
-                    <span className="text-xs px-1">Done</span>
-                  ) : (
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
+              {/* Show action buttons: always for non-party, for hosts in party, or for guests' own songs */}
+              {(!isPartyPlaylist || isHost || (guestName && item.addedBy === guestName)) && (
+                <div className="flex gap-1 flex-shrink-0">
+                  {/* Reorder buttons - only for party hosts (not guests) */}
+                  {isPartyPlaylist && isHost && onReorder && !guestName && (
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        onClick={() => onReorder(index, 'up')}
+                        disabled={index === 0 || index === currentIndex || index === currentIndex + 1}
+                        className={`p-0.5 rounded transition-all ${
+                          index === 0 || index === currentIndex || index === currentIndex + 1
+                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                        title={index === currentIndex ? "Cannot move currently playing song" : index === currentIndex + 1 ? "Cannot move next song up" : "Move up"}
+                      >
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={() => onReorder(index, 'down')}
+                        disabled={index === items.length - 1 || index === currentIndex}
+                        className={`p-0.5 rounded transition-all ${
+                          index === items.length - 1 || index === currentIndex
+                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed' 
+                            : 'bg-blue-500 text-white hover:bg-blue-600'
+                        }`}
+                        title={index === currentIndex ? "Cannot move currently playing song" : "Move down"}
+                      >
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
-                </button>
-              </div>
+                  {/* Play button - only for hosts or non-party playlists */}
+                  {(!isPartyPlaylist || (isHost && !guestName)) && (
+                    <button
+                      onClick={() => onPlay(index)}
+                      className="p-1 bg-orange-500 text-white rounded hover:bg-orange-600 transition-all"
+                      title="Play"
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Remove/Delete button - hide for currently playing song in party playlists, show for guests' own songs */}
+                  {!(isPartyPlaylist && index === currentIndex) && (
+                    <button
+                      onClick={() => onRemove(index)}
+                      className="p-1 bg-red-600 text-white rounded hover:bg-red-700 transition-all"
+                      title={isPartyPlaylist ? "Delete song" : "Remove"}
+                    >
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}
