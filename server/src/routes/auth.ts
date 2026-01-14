@@ -6,7 +6,10 @@ const router = express.Router();
 // Google OAuth routes
 router.get(
   '/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
+  passport.authenticate('google', { 
+    scope: ['profile', 'email'],
+    prompt: 'select_account' // Force account selection on every login
+  })
 );
 
 router.get(
@@ -37,6 +40,10 @@ router.post('/logout', (req, res) => {
         secure: process.env.NODE_ENV === 'production',
         sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
       });
+      // Add cache control headers to prevent caching on mobile
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.json({ message: 'Logged out successfully' });
     });
   });

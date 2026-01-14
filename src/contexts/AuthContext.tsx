@@ -59,15 +59,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       await fetch(`${API_URL}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
+        cache: 'no-store', // Prevent caching on mobile
       });
       setUser(null);
-      // Wait a bit to ensure session is destroyed before reload
+      
+      // Clear any cached data
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          names.forEach(name => caches.delete(name));
+        });
+      }
+      
+      // Redirect to Google logout to clear Google OAuth session on mobile
+      // This ensures the user is fully logged out from Google
+      const googleLogoutUrl = 'https://accounts.google.com/Logout';
+      
+      // Open Google logout in a hidden iframe to clear Google session
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = googleLogoutUrl;
+      document.body.appendChild(iframe);
+      
+      // Wait for Google logout, then redirect
       setTimeout(() => {
+        document.body.removeChild(iframe);
         window.location.href = '/';
-      }, 100);
+      }, 500);
     } catch (error) {
       console.error('Logout failed:', error);
       setUser(null);
+      window.location.href = '/';
     }
   };
 
