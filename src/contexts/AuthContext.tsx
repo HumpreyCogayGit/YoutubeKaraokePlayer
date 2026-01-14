@@ -51,20 +51,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    // Check for auth success parameter (from OAuth callback)
+    // Check for auth token (from OAuth callback on iOS)
     const urlParams = new URLSearchParams(window.location.search);
-    const authSuccess = urlParams.get('auth');
+    const authToken = urlParams.get('auth_token');
     
-    if (authSuccess === 'success') {
-      // Remove the parameter from URL
+    if (authToken) {
+      // Remove the parameter from URL immediately
       window.history.replaceState({}, '', window.location.pathname);
       
-      // On iOS, we need to delay the auth check slightly to ensure
-      // the session cookie is properly set after OAuth redirect
-      setTimeout(() => {
-        checkAuth();
-      }, 300);
+      // Exchange token for session
+      fetch(`${API_URL}/auth/exchange-token`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token: authToken }),
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.authenticated && data.user) {
+            setUser(data.user);
+          } else {
+            console.error('Token exchange failed:', data);
+          }
+          setIsLoading(false);
+        })
+        .catch(error => {
+          console.error('Token exchange error:', error);
+          setIsLoading(false);
+        });
     } else {
+      // Normal auth check for session-based auth
       checkAuth();
     }
   }, []);
