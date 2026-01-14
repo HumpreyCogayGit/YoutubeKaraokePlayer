@@ -86,12 +86,16 @@ app.use(
     secret: process.env.SESSION_SECRET!, // No fallback - required and validated at startup
     resave: false,
     saveUninitialized: false,
+    name: 'sessionId', // Custom name to avoid conflicts
+    proxy: true, // Trust the proxy for secure cookies
     cookie: {
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // Always use secure in production (Railway has HTTPS)
       httpOnly: true,
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      sameSite: 'none', // Required for cross-domain cookies (Railway <-> Vercel)
       maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      path: '/', // Ensure cookie is sent for all paths
     },
+    rolling: true, // Reset maxAge on every response to keep session alive
   })
 );
 

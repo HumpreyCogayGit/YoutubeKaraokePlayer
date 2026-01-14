@@ -30,6 +30,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       const response = await fetch(`${API_URL}/auth/status`, {
         credentials: 'include',
+        cache: 'no-store', // Prevent caching on Safari
+        headers: {
+          'Accept': 'application/json',
+        },
       });
       const data = await response.json();
       
@@ -47,7 +51,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    checkAuth();
+    // Check for auth success parameter (from OAuth callback)
+    const urlParams = new URLSearchParams(window.location.search);
+    const authSuccess = urlParams.get('auth');
+    
+    if (authSuccess === 'success') {
+      // Remove the parameter from URL
+      window.history.replaceState({}, '', window.location.pathname);
+      
+      // On iOS, we need to delay the auth check slightly to ensure
+      // the session cookie is properly set after OAuth redirect
+      setTimeout(() => {
+        checkAuth();
+      }, 300);
+    } else {
+      checkAuth();
+    }
   }, []);
 
   const login = () => {
