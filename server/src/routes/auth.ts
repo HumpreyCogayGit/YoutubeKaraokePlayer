@@ -30,8 +30,13 @@ router.post('/logout', (req, res) => {
       if (destroyErr) {
         console.error('Session destruction error:', destroyErr);
       }
-      // Clear the session cookie
-      res.clearCookie('connect.sid');
+      // Clear the session cookie with all possible options
+      res.clearCookie('connect.sid', {
+        path: '/',
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+      });
       res.json({ message: 'Logged out successfully' });
     });
   });
