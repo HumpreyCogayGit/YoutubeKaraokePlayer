@@ -47,7 +47,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   useEffect(() => {
-    checkAuth();
+    // Only auto-check auth if there's a session cookie
+    // This prevents auto-login after explicit logout
+    const hasSid = document.cookie.includes('connect.sid');
+    if (hasSid) {
+      checkAuth();
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
   const login = () => {
@@ -61,8 +68,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         credentials: 'include',
       });
       setUser(null);
+      // Force reload to clear any cached state
+      window.location.href = '/';
     } catch (error) {
       console.error('Logout failed:', error);
+      setUser(null);
     }
   };
 
